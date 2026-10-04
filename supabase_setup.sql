@@ -1,0 +1,44 @@
+CREATE TABLE IF NOT EXISTS public.bookings (
+    id text PRIMARY KEY,
+    booking_code text,
+    status text,
+    pickup_otp text,
+    created_at timestamp with time zone,
+    expires_at timestamp with time zone,
+    customer_phone text,
+    vehicle_id text,
+    vehicle_model text,
+    hub_name text,
+    start_time text,
+    end_time text,
+    total_amount numeric,
+    deposit numeric,
+    platform_fee numeric,
+    host_payout numeric,
+    utr_number text,
+    duration numeric
+);
+
+CREATE TABLE IF NOT EXISTS public.availability_slots (
+    id text PRIMARY KEY,
+    is_booked boolean DEFAULT false,
+    created_at timestamp with time zone,
+    vehicle_id text,
+    model text,
+    plate text,
+    battery numeric,
+    host_phone text,
+    start_time text,
+    end_time text
+);
+
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.availability_slots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "insert_bookings" ON public.bookings FOR INSERT WITH CHECK (true);
+CREATE POLICY "select_bookings" ON public.bookings FOR SELECT USING (true);
+CREATE POLICY "update_bookings" ON public.bookings FOR UPDATE USING (true);
+
+CREATE POLICY "insert_slots" ON public.availability_slots FOR INSERT WITH CHECK (true);
+CREATE POLICY "select_slots" ON public.availability_slots FOR SELECT USING (true);
+CREATE POLICY "update_slots" ON public.availability_slots FOR UPDATE USING (true);
