@@ -50,10 +50,10 @@ export function AppProvider({ children }) {
       }
 
       const { data: bData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false })
-      if (bData && bData.length > 0) setBookings(bData)
+      if (bData) setBookings(bData)
       
       const { data: sData } = await supabase.from('availability_slots').select('*').order('created_at', { ascending: false })
-      if (sData && sData.length > 0) setAvailabilitySlots(sData)
+      if (sData) setAvailabilitySlots(sData)
     }
     fetchData()
   }, [])
