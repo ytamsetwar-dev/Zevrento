@@ -54,10 +54,10 @@ export default function CheckoutPage() {
   const handleInitiatePayment = (mode) => {
     setPaymentMode(mode)
     setShowUtrModal(true)
-    
+
     // Trigger UPI deep link
     const amount = mode === 'DEPOSIT' ? 500 : fare.total
-    const upiId = 'YOUR_UPI_ID@okicici' // Change this to your actual UPI ID
+    const upiId = 'ytamsetwar-2@okaxis' // Change this to your actual UPI ID
     const upiLink = `upi://pay?pa=${upiId}&pn=Zevrento&am=${amount}&cu=INR`
     window.location.href = upiLink
   }
@@ -67,9 +67,9 @@ export default function CheckoutPage() {
       alert("Please enter the valid 12-digit UTR/Reference Number from your payment app.")
       return
     }
-    
+
     setPaymentProcessing(true)
-    
+
     const booking = createBooking({
       customer_phone: user?.phone || '',
       vehicle_id: vehicle.id,
@@ -97,8 +97,8 @@ export default function CheckoutPage() {
 
   const whatsappMessage = bookingResult
     ? encodeURIComponent(
-        `🛵 *Zevrento Booking Confirmed!*\n\nBooking Token: ${bookingResult.booking_code}\nVehicle: ${vehicle.model}\nPickup Location: ${hub.name}\nPickup Time: ${formatDateTime(pickupTime)}\nDuration: ${duration}h\nPayment: ${paymentMode === 'DEPOSIT' ? '₹500 Deposit Paid' : `₹${fare.total} Fully Paid`}\n\nThank you for choosing Zevrento!`
-      )
+      `🛵 *Zevrento Booking Confirmed!*\n\nBooking Token: ${bookingResult.booking_code}\nVehicle: ${vehicle.model}\nPickup Location: ${hub.name}\nPickup Time: ${formatDateTime(pickupTime)}\nDuration: ${duration}h\nPayment: ${paymentMode === 'DEPOSIT' ? '₹500 Deposit Paid' : `₹${fare.total} Fully Paid`}\n\nThank you for choosing Zevrento!`
+    )
     : ''
 
   if (booked && bookingResult) {
@@ -178,8 +178,8 @@ export default function CheckoutPage() {
               <IconShield size={28} style={{ marginBottom: '8px' }} />
               <div style={{ fontWeight: 700, fontSize: '1rem' }}>Payment Successful!</div>
               <div style={{ fontSize: '0.8125rem', marginTop: '4px', opacity: 0.9 }}>
-                Your ride slot is locked. The host has been notified. 
-                <br/>Proceed to the pickup location at your scheduled time.
+                Your ride slot is locked. The host has been notified.
+                <br />Proceed to the pickup location at your scheduled time.
               </div>
             </div>
 
@@ -292,8 +292,8 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: '0.8125rem', color: '#B91C1C', marginTop: '6px', marginBottom: '20px', lineHeight: 1.5 }}>
                     You must complete your KYC verification to unlock payments and lock this slot.
                   </div>
-                  <button 
-                    className="z-btn z-btn-primary z-btn-full" 
+                  <button
+                    className="z-btn z-btn-primary z-btn-full"
                     onClick={() => navigate('/customer/profile')}
                     style={{ background: '#DC2626' }}
                   >
@@ -315,11 +315,11 @@ export default function CheckoutPage() {
                     <li><strong>Damage Policy:</strong> Any damages incurred during the rental period will result in the forfeiture of the security deposit. Please inspect the vehicle thoroughly before and after your ride.</li>
                   </ul>
                   <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', marginTop: '12px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={tncAccepted} 
-                      onChange={(e) => setTncAccepted(e.target.checked)} 
-                      style={{ marginTop: '2px', accentColor: 'var(--z-emerald)' }} 
+                    <input
+                      type="checkbox"
+                      checked={tncAccepted}
+                      onChange={(e) => setTncAccepted(e.target.checked)}
+                      style={{ marginTop: '2px', accentColor: 'var(--z-emerald)' }}
                     />
                     <span style={{ fontWeight: 600 }}>I agree to the Terms & Conditions</span>
                   </label>
@@ -408,17 +408,17 @@ export default function CheckoutPage() {
                       style={{ fontSize: '1.1rem', letterSpacing: '2px', textAlign: 'center' }}
                     />
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <button 
-                      className="z-btn z-btn-primary" 
+                    <button
+                      className="z-btn z-btn-primary"
                       style={{ width: '100%', padding: '12px', fontWeight: 700 }}
                       onClick={handleConfirmUtr}
                     >
                       Confirm Payment
                     </button>
-                    <button 
-                      className="z-btn z-btn-outline" 
+                    <button
+                      className="z-btn z-btn-outline"
                       style={{ width: '100%', padding: '12px', fontWeight: 600 }}
                       onClick={() => setShowUtrModal(false)}
                     >
