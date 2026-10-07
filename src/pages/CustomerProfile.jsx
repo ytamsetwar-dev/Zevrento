@@ -75,16 +75,17 @@ export default function CustomerProfile() {
                     </div>
                   </div>
                   {(!user?.kyc_verified && user?.kyc_status !== 'PENDING') && (
-                    <a 
-                      href="https://wa.me/917020905724?text=Hi%2C%20I%20want%20to%20complete%20my%20KYC%20verification%20for%20my%20Zevrento%20account."
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button 
                       className="z-btn z-btn-outline" 
-                      style={{ fontSize: '0.75rem', padding: '6px 12px', textDecoration: 'none', display: 'flex', alignItems: 'center' }}
-                      onClick={() => submitKyc()}
+                      style={{ fontSize: '0.75rem', padding: '6px 12px', display: 'flex', alignItems: 'center' }}
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        await submitKyc()
+                        window.open("https://wa.me/917020905724?text=Hi%2C%20I%20want%20to%20complete%20my%20KYC%20verification%20for%20my%20Zevrento%20account.", "_blank")
+                      }}
                     >
                       Complete KYC
-                    </a>
+                    </button>
                   )}
                 </div>
               </div>
