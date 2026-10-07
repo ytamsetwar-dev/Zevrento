@@ -61,7 +61,8 @@ export default function CheckoutPage() {
     // Trigger UPI deep link
     const amount = mode === 'DEPOSIT' ? 500 : fare.total
     const upiId = 'ytamsetwar-2@okaxis' // Change this to your actual UPI ID
-    const upiLink = `upi://pay?pa=${upiId}&pn=Yash%20Tamsetwar&tn=Zevrento%20Booking&am=${amount}&cu=INR`
+    const trId = `ZEV${Date.now()}`
+    const upiLink = `upi://pay?pa=${upiId}&pn=Yash%20Tamsetwar&tr=${trId}&tn=Zevrento%20Booking&am=${amount}&cu=INR`
     window.location.href = upiLink
   }
 
