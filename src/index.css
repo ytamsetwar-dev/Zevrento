@@ -1186,4 +1186,8 @@ h4 { font-size: 1rem; font-weight: 600; line-height: 1.4; }
   }
   .z-stat-card { padding: 12px 8px; }
   .z-stat-value { font-size: 1.25rem; }
+  .search-row, .time-picker-row {
+    grid-template-columns: 1fr;
+    gap: var(--z-space-base);
+  }
 }
