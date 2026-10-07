@@ -21,6 +21,7 @@ export default function CheckoutPage() {
   const [showRazorpay, setShowRazorpay] = useState(false)
   const [paymentMode, setPaymentMode] = useState('FULL') // FULL or FEE
   const [paymentProcessing, setPaymentProcessing] = useState(false)
+  const [booked, setBooked] = useState(false)
 
   // Redirect if no state
   useEffect(() => {
