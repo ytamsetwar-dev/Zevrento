@@ -35,57 +35,60 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    // Simulate brief network delay
-    await new Promise((r) => setTimeout(r, 600))
-
-    // 1. HIDDEN ADMIN CHECK — zero UI footprint
-    if (checkAdminCredentials(userId.trim(), password.trim())) {
-      login({ id: 'admin', name: 'Hub Operator', phone: '', role: 'ADMIN' })
-      navigate('/admin/hub-panel', { replace: true })
-      return
-    }
-
-    // 2. DEMO / SUPABASE AUTH CHECK
-    let profile = checkDemoProfile(userId.trim(), password.trim())
-
-    if (!profile) {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: userId.trim(),
-        password: password.trim(),
-      })
-      
-      if (authError) {
-        setError(authError.message)
-        setLoading(false)
+    try {
+      // 1. HIDDEN ADMIN CHECK — zero UI footprint
+      if (checkAdminCredentials(userId.trim(), password.trim())) {
+        login({ id: 'admin', name: 'Hub Operator', phone: '', role: 'ADMIN' })
+        navigate('/admin/hub-panel', { replace: true })
         return
       }
 
-      const userPhone = authData?.user?.user_metadata?.phone
+      // 2. DEMO / SUPABASE AUTH CHECK
+      let profile = checkDemoProfile(userId.trim(), password.trim())
 
-      if (userPhone) {
-        const { data } = await supabase.from('profiles').select('*').eq('phone', userPhone).single()
-        if (data) profile = data
+      if (!profile) {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: userId.trim(),
+          password: password.trim(),
+        })
+        
+        if (authError) {
+          setError(authError.message)
+          setLoading(false)
+          return
+        }
+
+        const userPhone = authData?.user?.user_metadata?.phone
+
+        if (userPhone) {
+          const { data } = await supabase.from('profiles').select('*').eq('phone', userPhone).single()
+          if (data) profile = data
+        }
       }
-    }
-    if (profile) {
-      login({
-        id: profile.phone,
-        name: profile.full_name,
-        phone: profile.phone,
-        role: profile.role,
-      })
+      if (profile) {
+        login({
+          id: profile.phone,
+          name: profile.full_name,
+          phone: profile.phone,
+          role: profile.role,
+        })
 
-      if (profile.role === 'RIDER') {
-        navigate('/rider/dashboard', { replace: true })
-      } else {
-        navigate('/customer/home', { replace: true })
+        if (profile.role === 'RIDER') {
+          navigate('/rider/dashboard', { replace: true })
+        } else {
+          navigate('/customer/home', { replace: true })
+        }
+        return
       }
-      return
-    }
 
-    // 3. Fallback: Invalid credentials
-    setError('Invalid credentials. Please check and try again.')
-    setLoading(false)
+      // 3. Fallback: Invalid credentials
+      setError('Invalid credentials. Please check and try again.')
+      setLoading(false)
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Something went wrong during login. Please try again.')
+      setLoading(false)
+    }
   }
 
   return (

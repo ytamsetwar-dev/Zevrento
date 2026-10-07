@@ -27,7 +27,5 @@ export function checkAdminCredentials(userId, password) {
 }
 
 export function checkDemoProfile(userId, password) {
-  return DEMO_PROFILES.find(
-    (p) => (p.phone === userId) && p.password === password
-  )
+  return null
 }
