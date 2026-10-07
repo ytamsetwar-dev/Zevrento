@@ -389,6 +389,20 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
+              <div style={{ textAlign: 'center', marginBottom: '20px', padding: '16px', background: '#F8FAFC', borderRadius: '12px' }}>
+                <div style={{ fontSize: '0.8125rem', color: '#475569', marginBottom: '12px', lineHeight: 1.5 }}>
+                  If the app didn't open or the payment was blocked, <strong>scan this QR code</strong> using any UPI app (GPay, PhonePe, Paytm).
+                </div>
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`upi://pay?pa=ytamsetwar-2@okaxis&pn=Yash%20Tamsetwar&tn=Zevrento%20Booking&am=${paymentMode === 'DEPOSIT' ? 500 : fare.total}&cu=INR`)}`} 
+                  alt="UPI QR Code" 
+                  style={{ width: '150px', height: '150px', borderRadius: '8px', border: '2px solid #E2E8F0', padding: '4px', background: '#FFF' }}
+                />
+                <div style={{ fontSize: '0.875rem', color: '#334155', marginTop: '12px', fontWeight: 700 }}>
+                  UPI ID: ytamsetwar-2@okaxis
+                </div>
+              </div>
+
               {paymentProcessing ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div className="spinner" style={{
