@@ -27,36 +27,37 @@ export function AppProvider({ children }) {
   })
 
   // Fetch from Supabase on load
-  useEffect(() => {
-    async function fetchData() {
-      // Sync latest profile data
-      const savedStr = localStorage.getItem('z_user')
-      if (savedStr) {
-        try {
-          const saved = JSON.parse(savedStr)
-          if (saved?.phone && saved.phone !== '') {
-            const { data } = await supabase.from('profiles').select('*').eq('phone', saved.phone).single()
-            if (data) {
-              setUser(prev => prev ? {
-                ...prev,
-                kyc_status: data.kyc_status,
-                kyc_verified: data.kyc_status === 'VERIFIED' || data.kyc_verified,
-              } : null)
-            }
+  const refreshData = useCallback(async () => {
+    // Sync latest profile data
+    const savedStr = localStorage.getItem('z_user')
+    if (savedStr) {
+      try {
+        const saved = JSON.parse(savedStr)
+        if (saved?.phone && saved.phone !== '') {
+          const { data } = await supabase.from('profiles').select('*').eq('phone', saved.phone).single()
+          if (data) {
+            setUser(prev => prev ? {
+              ...prev,
+              kyc_status: data.kyc_status,
+              kyc_verified: data.kyc_status === 'VERIFIED' || data.kyc_verified,
+            } : null)
           }
-        } catch (e) {
-          console.error('Error syncing profile:', e)
         }
+      } catch (e) {
+        console.error('Error syncing profile:', e)
       }
-
-      const { data: bData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false })
-      if (bData) setBookings(bData)
-      
-      const { data: sData } = await supabase.from('availability_slots').select('*').order('created_at', { ascending: false })
-      if (sData) setAvailabilitySlots(sData)
     }
-    fetchData()
+
+    const { data: bData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false })
+    if (bData) setBookings(bData)
+    
+    const { data: sData } = await supabase.from('availability_slots').select('*').order('created_at', { ascending: false })
+    if (sData) setAvailabilitySlots(sData)
   }, [])
+
+  useEffect(() => {
+    refreshData()
+  }, [refreshData])
 
   // Persist to localStorage
   useEffect(() => {
@@ -210,6 +211,7 @@ export function AppProvider({ children }) {
     completeBooking,
     publishSlot,
     deleteSlot,
+    refreshData,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

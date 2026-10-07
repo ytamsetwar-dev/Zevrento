@@ -26,7 +26,7 @@ const STATUS_LABELS = {
 }
 
 export default function AdminHubPanel() {
-  const { bookings, availabilitySlots, approveBooking, completeBooking, updateBookingStatus, verifyUserKyc } = useApp()
+  const { bookings, availabilitySlots, approveBooking, completeBooking, updateBookingStatus, verifyUserKyc, refreshData } = useApp()
   const [activeTab, setActiveTab] = useState('bookings') // bookings, transactions, customers, hosts
   const [tokenSearch, setTokenSearch] = useState('')
   const [activeOTP, setActiveOTP] = useState(null)
@@ -148,16 +148,27 @@ export default function AdminHubPanel() {
         <div className="z-container">
           {/* Header Badge */}
           <div className="animate-fade-in-up" style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            marginBottom: '24px',
-            padding: '12px 16px',
-            background: '#FEF3C7',
-            border: '1px solid #FDE68A',
-            borderRadius: 'var(--z-radius-md)',
-            fontSize: '0.8125rem', fontWeight: 600, color: '#92400E',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            marginBottom: '24px'
           }}>
-            <IconShield size={18} />
-            Admin Access — Hub Operator Panel
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '12px 16px',
+              background: '#FEF3C7',
+              border: '1px solid #FDE68A',
+              borderRadius: 'var(--z-radius-md)',
+              fontSize: '0.8125rem', fontWeight: 600, color: '#92400E',
+            }}>
+              <IconShield size={18} />
+              Admin Access — Hub Operator Panel
+            </div>
+            
+            <button 
+              onClick={refreshData}
+              style={{ background: 'var(--z-emerald-ultra-light)', border: '1px solid var(--z-emerald-light)', padding: '10px 16px', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 700, color: 'var(--z-emerald)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <IconRefresh size={16} /> Sync Latest
+            </button>
           </div>
 
           {/* Tabs */}

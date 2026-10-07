@@ -10,7 +10,7 @@ import { PageShell, RiderBottomNav } from '../components/Layout.jsx'
 import { IconScooter, IconDollar, IconZap, IconPlus, IconClock } from '../components/Icons.jsx'
 
 export default function RiderDashboard() {
-  const { availabilitySlots, bookings, user, deleteSlot } = useApp()
+  const { availabilitySlots, bookings, user, deleteSlot, refreshData } = useApp()
   const navigate = useNavigate()
 
   const stats = useMemo(() => {
@@ -107,10 +107,18 @@ export default function RiderDashboard() {
 
           {/* Active Listings */}
           <div className="animate-fade-in-up stagger-4">
-            <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <IconClock size={18} />
-              Your Listings
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <IconClock size={18} />
+                Your Listings
+              </h3>
+              <button 
+                onClick={refreshData}
+                style={{ background: 'var(--z-surface)', border: '1px solid var(--z-border)', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                Refresh
+              </button>
+            </div>
 
             {availabilitySlots.length === 0 ? (
               <div className="z-card">
