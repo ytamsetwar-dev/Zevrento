@@ -53,6 +53,7 @@ DROP POLICY IF EXISTS "update_slots" ON public.availability_slots;
 CREATE POLICY "insert_slots" ON public.availability_slots FOR INSERT WITH CHECK (true);
 CREATE POLICY "select_slots" ON public.availability_slots FOR SELECT USING (true);
 CREATE POLICY "update_slots" ON public.availability_slots FOR UPDATE USING (true);
+CREATE POLICY "delete_slots" ON public.availability_slots FOR DELETE USING (true);
     
 -- Fix Profiles Login Bug
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
