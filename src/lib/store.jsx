@@ -57,6 +57,14 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     refreshData()
+    
+    // Auto-refresh data periodically to simulate realtime updates
+    // Using 3 seconds (3000ms) to ensure we don't crash your Supabase free tier rate limits
+    const intervalId = setInterval(() => {
+      refreshData()
+    }, 3000)
+    
+    return () => clearInterval(intervalId)
   }, [refreshData])
 
   // Persist to localStorage
