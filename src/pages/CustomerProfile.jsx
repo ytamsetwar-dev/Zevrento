@@ -3,7 +3,7 @@
 // =============================================
 import { useApp } from '../lib/store.jsx'
 import { PageShell, CustomerBottomNav } from '../components/Layout.jsx'
-import { IconUser, IconPhone, IconShield } from '../components/Icons.jsx'
+import { IconUser, IconPhone, IconShield, IconClock } from '../components/Icons.jsx'
 
 export default function CustomerProfile() {
   const { user, verifyUserKyc, submitKyc } = useApp()
