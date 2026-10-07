@@ -181,6 +181,15 @@ export function AppProvider({ children }) {
     return slot
   }, [])
 
+  const deleteSlot = useCallback((slotId) => {
+    setAvailabilitySlots((prev) => prev.filter(s => s.id !== slotId))
+    
+    // Background sync to Supabase
+    supabase.from('availability_slots').delete().eq('id', slotId).then(({error}) => {
+      if (error) console.error('Supabase delete slot error:', error)
+    })
+  }, [])
+
   const value = {
     // Auth
     user,
@@ -200,6 +209,7 @@ export function AppProvider({ children }) {
     approveBooking,
     completeBooking,
     publishSlot,
+    deleteSlot,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

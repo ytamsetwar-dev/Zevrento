@@ -10,7 +10,7 @@ import { PageShell, RiderBottomNav } from '../components/Layout.jsx'
 import { IconScooter, IconDollar, IconZap, IconPlus, IconClock } from '../components/Icons.jsx'
 
 export default function RiderDashboard() {
-  const { availabilitySlots, bookings, user } = useApp()
+  const { availabilitySlots, bookings, user, deleteSlot } = useApp()
   const navigate = useNavigate()
 
   const stats = useMemo(() => {
@@ -136,9 +136,23 @@ export default function RiderDashboard() {
                             <IconScooter size={16} style={{ verticalAlign: '-3px', marginRight: '6px' }} />
                             {slot.model}
                           </span>
-                          <span className={`z-badge ${slot.is_booked ? 'z-badge-emerald' : 'z-badge-info'}`}>
-                            {slot.is_booked ? 'Booked' : 'Available'}
-                          </span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {!slot.is_booked && (
+                              <button 
+                                onClick={() => {
+                                  if (window.confirm("Are you sure you want to delete this listing?")) {
+                                    deleteSlot(slot.id)
+                                  }
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#EF4444', fontSize: '0.75rem', fontWeight: 600, padding: '4px', cursor: 'pointer' }}
+                              >
+                                Delete
+                              </button>
+                            )}
+                            <span className={`z-badge ${slot.is_booked ? 'z-badge-emerald' : 'z-badge-info'}`}>
+                              {slot.is_booked ? 'Booked' : 'Available'}
+                            </span>
+                          </div>
                         </div>
 
                         <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)', marginBottom: '6px' }}>
