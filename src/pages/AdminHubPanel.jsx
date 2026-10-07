@@ -244,7 +244,7 @@ export default function AdminHubPanel() {
                           </span>
                           <span className="label">Payment</span>
                           <span className="value" style={{ color: 'var(--z-emerald)', fontWeight: 700 }}>
-                            {booking.payment_mode === 'BOOKING_FEE_ONLY' ? '₹1000 Fee Paid' : `₹${booking.total_amount} Full`}
+                            {booking.payment_mode === 'DEPOSIT_ONLY' ? '₹500 Deposit Paid' : `₹${booking.total_amount} Full`}
                           </span>
                           <span className="label">Pickup</span>
                           <span className="value" style={{ fontSize: '0.6875rem' }}>{formatDateTime(booking.start_time)}</span>
