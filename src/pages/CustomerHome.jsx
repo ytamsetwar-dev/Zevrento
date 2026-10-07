@@ -2,7 +2,7 @@
 // Zevrento — Customer Home (Royal Brothers Flow)
 // Sticky search card + Vehicle fleet catalog
 // =============================================
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
 import { HUBS, PRICING, getHoursDiff, roundToNextHour, addHours, toInputDateTime, calculateFare } from '../lib/data.js'
@@ -10,7 +10,7 @@ import { PageShell, CustomerBottomNav } from '../components/Layout.jsx'
 import { IconMapPin, IconClock, IconCalendar, IconSearch, IconZap, IconBattery, IconChevronDown } from '../components/Icons.jsx'
 
 export default function CustomerHome() {
-  const { vehicles, availabilitySlots } = useApp()
+  const { vehicles, availabilitySlots, user } = useApp()
   const navigate = useNavigate()
 
   // Search state
@@ -21,27 +21,61 @@ export default function CustomerHome() {
   const [pickupTime, setPickupTime] = useState(toInputDateTime(defaultPickup))
   const [dropoffTime, setDropoffTime] = useState(toInputDateTime(defaultDropoff))
   const [searched, setSearched] = useState(false)
+  const [showPopup, setShowPopup] = useState(true)
+  const [sortBy, setSortBy] = useState('none') // 'battery', 'duration'
 
   const duration = useMemo(() => getHoursDiff(pickupTime, dropoffTime), [pickupTime, dropoffTime])
+  const selectedHub = HUBS.find((h) => h.id === hub)
 
   const availableVehicles = useMemo(() => {
-    const defaults = vehicles.filter((v) => v.status === 'available')
-    const hosts = availabilitySlots
+    let hosts = availabilitySlots
       .filter((s) => !s.is_booked)
-      .map((s) => ({
-        id: s.id,
-        model: s.model,
-        plate: s.plate,
-        color: '#10B981',
-        battery: s.battery || 100,
-        rate: PRICING.baseRate,
-        status: 'available',
-        tags: ['Host EV', 'Verified'],
-      }))
-    return [...hosts, ...defaults]
-  }, [vehicles, availabilitySlots])
+      .map((s) => {
+        const durationAvailable = getHoursDiff(s.start_time, s.end_time)
+        return {
+          id: s.id,
+          model: s.model,
+          plate: s.plate,
+          color: '#10B981',
+          battery: s.battery || 100,
+          rate: PRICING.baseRate,
+          status: 'available',
+          tags: ['Host EV', 'Verified'],
+          durationAvailable,
+          location: s.pickup_location || selectedHub?.name || 'Owner Location',
+          start_time: s.start_time,
+          end_time: s.end_time,
+          hub_id: s.hub_id,
+          pickup_location: s.pickup_location
+        }
+      })
 
-  const selectedHub = HUBS.find((h) => h.id === hub)
+    // Filter by location
+    hosts = hosts.filter(h => {
+      if (h.hub_id) return h.hub_id === hub;
+      if (h.pickup_location) return h.pickup_location.includes(selectedHub?.name);
+      return true; // Fallback
+    })
+
+    // Filter by requested duration and time slot if a search was made
+    if (searched) {
+      const pTime = new Date(pickupTime)
+      const dTime = new Date(dropoffTime)
+      hosts = hosts.filter(h => {
+        const hStart = new Date(h.start_time)
+        const hEnd = new Date(h.end_time)
+        return pTime >= hStart && dTime <= hEnd
+      })
+    }
+      
+    if (sortBy === 'battery') {
+      hosts = hosts.sort((a, b) => b.battery - a.battery)
+    } else if (sortBy === 'duration') {
+      hosts = hosts.sort((a, b) => b.durationAvailable - a.durationAvailable)
+    }
+    
+    return hosts
+  }, [availabilitySlots, sortBy, selectedHub, hub, pickupTime, dropoffTime, searched])
 
   const handleSearch = () => {
     if (duration < 1) return
@@ -49,6 +83,12 @@ export default function CustomerHome() {
   }
 
   const handleBookNow = (vehicle) => {
+    if (user?.kyc_status !== 'VERIFIED' && !user?.kyc_verified) {
+      alert("Your KYC is not verified yet. Please go to your Profile and complete KYC verification to book a vehicle.")
+      navigate('/customer/profile')
+      return
+    }
+
     navigate('/customer/checkout', {
       state: {
         vehicle,
@@ -63,6 +103,39 @@ export default function CustomerHome() {
 
   return (
     <PageShell nav={<CustomerBottomNav />}>
+      {/* ---- STARTUP POPUP ---- */}
+      {showPopup && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', zIndex: 999999, // Super high z-index
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div className="animate-fade-in-up" style={{
+            background: 'var(--z-bg)', borderRadius: '24px', padding: '32px 24px',
+            textAlign: 'center', maxWidth: '380px', width: '100%',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            border: '1px solid var(--z-border)'
+          }}>
+            <div style={{ background: 'var(--z-emerald-ultra-light)', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+               <IconZap size={32} style={{ color: 'var(--z-emerald)' }} />
+            </div>
+            <h2 style={{ marginBottom: '12px', fontSize: '1.5rem', fontWeight: 800 }}>Welcome to Zevrento!</h2>
+            <p style={{ color: 'var(--z-text-primary)', fontSize: '0.9375rem', lineHeight: '1.6', marginBottom: '24px', opacity: 0.9 }}>
+              Zevrento is the platform where owners host their idle EVs, and you can rent them instantly starting at just <strong>₹99/hour</strong>. 
+              <br/><br/>Zero hassle, unlimited kilometers, 100% tension-free!
+            </p>
+            <button 
+              className="z-btn z-btn-primary z-btn-full z-btn-lg" 
+              onClick={() => setShowPopup(false)}
+              style={{ fontWeight: 700, fontSize: '1rem', padding: '16px' }}
+            >
+              Start Riding
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ---- STICKY SEARCH CARD ---- */}
       <div className="search-card">
         <div className="search-card-inner">
@@ -70,7 +143,7 @@ export default function CustomerHome() {
           <div className="z-input-group search-location">
             <label className="z-input-label">
               <IconMapPin size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-              Pickup Hub
+              Pickup Area
             </label>
             <div style={{ position: 'relative' }}>
               <select
@@ -145,15 +218,31 @@ export default function CustomerHome() {
       {/* ---- VEHICLE FLEET CATALOG ---- */}
       <section className="fleet-section">
         <div className="z-container">
-          <div className="fleet-heading">
-            <h2>
-              {searched ? `${availableVehicles.length} EVs Available` : 'Our Fleet'}
-            </h2>
-            {searched && (
-              <span className="z-badge z-badge-emerald">
-                <IconZap size={12} /> Live
-              </span>
-            )}
+          <div className="fleet-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <h2>
+                {searched ? `${availableVehicles.length} EVs Available` : 'Hosted EVs'}
+              </h2>
+              {searched && (
+                <span className="z-badge z-badge-emerald" style={{ marginTop: '4px', display: 'inline-block' }}>
+                  <IconZap size={12} /> Live
+                </span>
+              )}
+            </div>
+            
+            {/* Sorting/Filtering */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select 
+                className="z-input" 
+                style={{ padding: '6px 12px', fontSize: '0.8125rem', height: 'auto', borderRadius: '20px' }}
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="none">Sort By</option>
+                <option value="battery">High Battery</option>
+                <option value="duration">Longest Duration</option>
+              </select>
+            </div>
           </div>
 
           {availableVehicles.map((vehicle, idx) => (
@@ -206,14 +295,20 @@ export default function CustomerHome() {
                 <div className="vehicle-card-header">
                   <div>
                     <div className="vehicle-card-name">{vehicle.model}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--z-text-light)', marginTop: '2px' }}>
-                      {vehicle.plate}
+                    <div style={{ fontSize: '0.75rem', color: 'var(--z-text-light)', marginTop: '2px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span>{vehicle.plate}</span>
+                      <span>•</span>
+                      <span style={{ color: 'var(--z-emerald)' }}><IconMapPin size={10} style={{ display: 'inline', verticalAlign: '-1px' }} /> {vehicle.location}</span>
                     </div>
                   </div>
                   <div className="vehicle-card-rate">
                     <div className="price">₹{vehicle.rate}</div>
                     <div className="unit">/hr</div>
                   </div>
+                </div>
+
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--z-emerald)', marginBottom: '8px' }}>
+                  Available for up to {vehicle.durationAvailable} hours
                 </div>
 
                 {/* Tags */}

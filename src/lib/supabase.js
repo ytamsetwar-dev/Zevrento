@@ -17,13 +17,7 @@ export const ADMIN_CREDENTIALS = {
   password: 'Yash@150603',
 }
 
-// =============================================
-// Demo Profiles (fallback when Supabase is not configured)
-// =============================================
-export const DEMO_PROFILES = [
-  { phone: '9876543210', password: '1234', full_name: 'Priya Sharma', role: 'CUSTOMER' },
-  { phone: '9123456789', password: '5678', full_name: 'Rahul Verma', role: 'RIDER' },
-]
+
 
 // =============================================
 // Auth helpers

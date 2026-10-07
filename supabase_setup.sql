@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
     platform_fee numeric,
     host_payout numeric,
     utr_number text,
+    payment_mode text DEFAULT 'UPI',
     duration numeric
 );
 
@@ -42,3 +43,15 @@ CREATE POLICY "update_bookings" ON public.bookings FOR UPDATE USING (true);
 CREATE POLICY "insert_slots" ON public.availability_slots FOR INSERT WITH CHECK (true);
 CREATE POLICY "select_slots" ON public.availability_slots FOR SELECT USING (true);
 CREATE POLICY "update_slots" ON public.availability_slots FOR UPDATE USING (true);
+    
+-- Fix Profiles Login Bug
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON public.profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "Enable delete for all users" ON public.profiles FOR DELETE USING (true);
+
+-- Phase 1 Schema Updates
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS kyc_status text DEFAULT 'PENDING';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_mode text DEFAULT 'UPI';

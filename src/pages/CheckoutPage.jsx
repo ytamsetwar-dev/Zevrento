@@ -15,11 +15,12 @@ export default function CheckoutPage() {
   const { createBooking, user } = useApp()
   const state = location.state
 
-  const [utr, setUtr] = useState('')
-  const [selectedUPI, setSelectedUPI] = useState(null)
-  const [booked, setBooked] = useState(false)
   const [bookingResult, setBookingResult] = useState(null)
   const [timerSeconds, setTimerSeconds] = useState(600) // 10 min
+  const [tncAccepted, setTncAccepted] = useState(false)
+  const [showRazorpay, setShowRazorpay] = useState(false)
+  const [paymentMode, setPaymentMode] = useState('FULL') // FULL or FEE
+  const [paymentProcessing, setPaymentProcessing] = useState(false)
 
   // Redirect if no state
   useEffect(() => {
@@ -51,9 +52,15 @@ export default function CheckoutPage() {
 
   const { vehicle, hub, pickupTime, dropoffTime, duration, fare } = state
 
-  const handleConfirmBooking = () => {
-    if (!utr.trim() || utr.trim().length < 10) return
+  const handleInitiatePayment = (mode) => {
+    setPaymentMode(mode)
+    setShowRazorpay(true)
+  }
 
+  const handleRazorpaySuccess = () => {
+    setPaymentProcessing(true)
+    
+    // Step 1: Create booking as PENDING_PAYMENT
     const booking = createBooking({
       customer_phone: user?.phone || '',
       vehicle_id: vehicle.id,
@@ -65,17 +72,24 @@ export default function CheckoutPage() {
       deposit: fare.deposit,
       platform_fee: fare.platformFeeTotal,
       host_payout: fare.hostPayoutTotal,
-      utr_number: utr.trim(),
+      utr_number: 'rzp_mock_' + Date.now(),
+      payment_mode: paymentMode === 'FEE' ? 'BOOKING_FEE_ONLY' : 'FULL_PAYMENT',
       duration,
+      status: 'PENDING_PAYMENT'
     })
 
-    setBookingResult(booking)
-    setBooked(true)
+    // Step 2: Simulate Webhook changing status to CONFIRMED
+    setTimeout(() => {
+      setBookingResult({ ...booking, status: 'CONFIRMED' })
+      setPaymentProcessing(false)
+      setBooked(true)
+      setShowRazorpay(false)
+    }, 2000)
   }
 
   const whatsappMessage = bookingResult
     ? encodeURIComponent(
-        `🛵 *Zevrento KYC Verification*\n\nBooking Token: ${bookingResult.booking_code}\nVehicle: ${vehicle.model}\nHub: ${hub.name}\nPickup: ${formatDateTime(pickupTime)}\nDuration: ${duration}h\nUTR: ${utr}\n\nPlease share or Attached in this message below :\n1️⃣ Driving License (both sides)\n2️⃣ Aadhaar Card\n3️⃣ Selfie photo`
+        `🛵 *Zevrento Booking Confirmed!*\n\nBooking Token: ${bookingResult.booking_code}\nVehicle: ${vehicle.model}\nPickup Location: ${hub.name}\nPickup Time: ${formatDateTime(pickupTime)}\nDuration: ${duration}h\nPayment: ${paymentMode === 'FEE' ? '₹1000 Booking Fee Paid' : `₹${fare.total} Fully Paid`}\n\nThank you for choosing Zevrento!`
       )
     : ''
 
@@ -151,32 +165,26 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* WhatsApp CTA or Verified State */}
-            {!user?.kyc_verified ? (
-              <>
-                <a
-                  href={`https://wa.me/917020905724?text=${whatsappMessage}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="whatsapp-btn animate-fade-in-up stagger-3"
-                  style={{ textDecoration: 'none', display: 'flex' }}
-                >
-                  <IconWhatsApp size={22} />
-                  Submit KYC & Lock Ride on WhatsApp
-                </a>
-                <p style={{ textAlign: 'center', fontSize: '0.6875rem', color: 'var(--z-text-light)', marginTop: '12px' }}>
-                  Share your DL, Aadhaar, and selfie on WhatsApp to verify identity. No media is stored on our servers.
-                </p>
-              </>
-            ) : (
-              <div className="animate-fade-in-up stagger-3" style={{ textAlign: 'center', background: 'var(--z-emerald-ultra-light)', padding: '16px', borderRadius: '12px', color: 'var(--z-emerald-dark)', marginTop: '16px' }}>
-                <IconShield size={28} style={{ marginBottom: '8px' }} />
-                <div style={{ fontWeight: 700, fontSize: '1rem' }}>KYC Already Verified</div>
-                <div style={{ fontSize: '0.8125rem', marginTop: '4px', opacity: 0.9 }}>
-                  Your ride slot is locked. The hub operator will verify your UTR and assign your vehicle.
-                </div>
+            {/* Post-Booking Instructions */}
+            <div className="animate-fade-in-up stagger-3" style={{ textAlign: 'center', background: 'var(--z-emerald-ultra-light)', padding: '16px', borderRadius: '12px', color: 'var(--z-emerald-dark)', marginTop: '16px' }}>
+              <IconShield size={28} style={{ marginBottom: '8px' }} />
+              <div style={{ fontWeight: 700, fontSize: '1rem' }}>Payment Successful!</div>
+              <div style={{ fontSize: '0.8125rem', marginTop: '4px', opacity: 0.9 }}>
+                Your ride slot is locked. The host has been notified. 
+                <br/>Proceed to the pickup location at your scheduled time.
               </div>
-            )}
+            </div>
+
+            <a
+              href={`https://wa.me/?text=${whatsappMessage}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="whatsapp-btn animate-fade-in-up stagger-3"
+              style={{ textDecoration: 'none', display: 'flex', marginTop: '16px', justifyContent: 'center' }}
+            >
+              <IconWhatsApp size={22} />
+              Share Booking Details via WhatsApp
+            </a>
           </div>
         </div>
       </PageShell>
@@ -288,57 +296,119 @@ export default function CheckoutPage() {
             </div>
           ) : (
             <div className="checkout-section animate-fade-in-up stagger-2">
-              <div className="checkout-section-title">Payment via UPI</div>
+              <div className="checkout-section-title">Payment Options</div>
 
-              <div className="upi-buttons">
-                {['GPay', 'PhonePe', 'Paytm'].map((app) => {
-                  const upiId = 'ytamsetwar-2@okaxis'
-                  const payeeName = 'YASH TAMSETWAR'
-                  const transactionNote = encodeURIComponent(`Zevrento Booking ${vehicle?.model || ''}`)
-                  const upiUrl = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${fare.total}&cu=INR&tn=${transactionNote}`
-
-                  return (
-                    <a
-                      key={app}
-                      href={upiUrl}
-                      className={`upi-btn ${selectedUPI === app ? 'selected' : ''}`}
-                      onClick={() => setSelectedUPI(app)}
-                      style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      {app}
-                    </a>
-                  )
-                })}
+              <div className="z-card" style={{ marginBottom: '16px', background: 'var(--z-emerald-ultra-light)' }}>
+                <div className="z-card-body" style={{ fontSize: '0.75rem', color: 'var(--z-text-primary)' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px' }}>Terms & Conditions:</div>
+                  <ul style={{ paddingLeft: '16px', margin: '0 0 12px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <li>Battery percentage & scooter health must be verified by customer and EV owner. Zevrento is not responsible.</li>
+                    <li>As there is unlimited km, for battery swapping Zevrento and EV owner are not responsible.</li>
+                    <li>If any damage is caused, the full deposit is non-refundable. Verify before and after ride.</li>
+                  </ul>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={tncAccepted} 
+                      onChange={(e) => setTncAccepted(e.target.checked)} 
+                      style={{ marginTop: '2px', accentColor: 'var(--z-emerald)' }} 
+                    />
+                    <span style={{ fontWeight: 600 }}>I agree to the Terms & Conditions</span>
+                  </label>
+                </div>
               </div>
 
-              <div className="z-input-group" style={{ marginBottom: '16px' }}>
-                <label className="z-input-label">12-Digit UTR / Transaction Reference</label>
-                <input
-                  className="z-input"
-                  type="text"
-                  placeholder="Enter UTR number"
-                  value={utr}
-                  onChange={(e) => setUtr(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
-                  maxLength={12}
-                  inputMode="numeric"
-                />
-                <span style={{ fontSize: '0.6875rem', color: 'var(--z-text-light)' }}>
-                  Find this in your UPI app's transaction history
-                </span>
-              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <button
+                  className="z-btn z-btn-outline z-btn-full z-btn-lg"
+                  onClick={() => handleInitiatePayment('FEE')}
+                  disabled={timerSeconds === 0 || !tncAccepted}
+                  style={{ display: 'flex', flexDirection: 'column', padding: '12px', height: 'auto', gap: '4px', background: '#F8FAFC' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                    <IconShield size={18} /> Pay ₹1,000 Booking Fee Now
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)', fontWeight: 500 }}>
+                    Reserve slot instantly. Pay remaining ₹{fare.total - 1000} at pickup. (Bypasses UPI limits)
+                  </span>
+                </button>
 
-              <button
-                className="z-btn z-btn-primary z-btn-full z-btn-lg"
-                onClick={handleConfirmBooking}
-                disabled={utr.trim().length < 10 || timerSeconds === 0}
-              >
-                <IconShield size={18} />
-                Confirm & Lock Slot
-              </button>
+                <button
+                  className="z-btn z-btn-primary z-btn-full z-btn-lg"
+                  onClick={() => handleInitiatePayment('FULL')}
+                  disabled={timerSeconds === 0 || !tncAccepted}
+                  style={{ display: 'flex', flexDirection: 'column', padding: '12px', height: 'auto', gap: '4px' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                    Pay Full Amount (₹{fare.total})
+                  </span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.9, fontWeight: 500 }}>
+                    Complete payment now via Cards/NetBanking/UPI
+                  </span>
+                </button>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* RAZORPAY MOCK MODAL */}
+      {showRazorpay && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '380px',
+            overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ background: '#02042B', padding: '20px', color: '#fff', textAlign: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                <IconZap size={20} /> Razorpay Test
+              </h3>
+              <div style={{ opacity: 0.8, fontSize: '0.875rem', marginTop: '4px' }}>Zevrento Rentals</div>
+            </div>
+            <div style={{ padding: '24px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <div style={{ fontSize: '0.875rem', color: '#64748B' }}>Amount Payable</div>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0F172A' }}>
+                  ₹{paymentMode === 'FEE' ? '1,000.00' : `${fare.total}.00`}
+                </div>
+              </div>
+
+              {paymentProcessing ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <div className="spinner" style={{
+                    width: '32px', height: '32px', margin: '0 auto 16px',
+                    border: '3px solid #E2E8F0', borderTopColor: '#3B82F6',
+                    borderRadius: '50%', animation: 'spin 1s linear infinite'
+                  }} />
+                  <div style={{ fontWeight: 600, color: '#334155' }}>Processing Payment...</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Waiting for Webhook confirmation</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <button 
+                    className="z-btn" 
+                    style={{ background: '#22C55E', color: 'white', width: '100%', padding: '12px', fontWeight: 700 }}
+                    onClick={handleRazorpaySuccess}
+                  >
+                    Simulate Successful Payment
+                  </button>
+                  <button 
+                    className="z-btn z-btn-outline" 
+                    style={{ width: '100%', padding: '12px', fontWeight: 600 }}
+                    onClick={() => setShowRazorpay(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   )
 }

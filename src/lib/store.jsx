@@ -83,9 +83,21 @@ export function AppProvider({ children }) {
     setIsAuthenticated(false)
   }, [])
 
-  const verifyUserKyc = useCallback(() => {
-    setUser((prev) => prev ? { ...prev, kyc_verified: true } : null)
-  }, [])
+  const submitKyc = useCallback(async () => {
+    // Customer submits KYC (moves to PENDING)
+    setUser((prev) => prev ? { ...prev, kyc_status: 'PENDING' } : null)
+    if (user?.phone) {
+      await supabase.from('profiles').update({ kyc_status: 'PENDING' }).eq('phone', user.phone)
+    }
+  }, [user])
+
+  const verifyUserKyc = useCallback(async (phoneToVerify) => {
+    // Admin approves KYC
+    if (user?.phone === phoneToVerify) {
+      setUser((prev) => prev ? { ...prev, kyc_verified: true, kyc_status: 'VERIFIED' } : null)
+    }
+    await supabase.from('profiles').update({ kyc_status: 'VERIFIED' }).eq('phone', phoneToVerify)
+  }, [user])
 
   // ---- BOOKINGS ----
   const createBooking = useCallback((bookingData) => {
@@ -156,6 +168,7 @@ export function AppProvider({ children }) {
     login,
     logout,
     verifyUserKyc,
+    submitKyc,
     // Data
     vehicles,
     setVehicles,

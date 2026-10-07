@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   phone VARCHAR(15) NOT NULL UNIQUE,
   full_name VARCHAR(100) NOT NULL,
-  role VARCHAR(10) NOT NULL CHECK (role IN ('CUSTOMER', 'RIDER')),
+  role VARCHAR(10) NOT NULL CHECK (role IN ('CUSTOMER', 'RIDER', 'ADMIN')),
+  kyc_status VARCHAR(20) DEFAULT 'PENDING' CHECK (kyc_status IN ('PENDING', 'VERIFIED', 'REJECTED')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -60,9 +61,10 @@ CREATE TABLE IF NOT EXISTS bookings (
   platform_fee DECIMAL(10,2) NOT NULL,
   host_payout DECIMAL(10,2) NOT NULL,
   utr_number VARCHAR(20),
+  payment_mode VARCHAR(20) DEFAULT 'UPI',
   pickup_otp VARCHAR(4),
-  status VARCHAR(20) DEFAULT 'PENDING_KYC' CHECK (
-    status IN ('PENDING_KYC', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'EXPIRED')
+  status VARCHAR(20) DEFAULT 'PENDING_PAYMENT' CHECK (
+    status IN ('PENDING_PAYMENT', 'PENDING_KYC', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'EXPIRED')
   ),
   expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -90,10 +92,10 @@ ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE availability_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 
--- Profiles: Users can read own profile
-CREATE POLICY "Users can view own profile"
-  ON profiles FOR SELECT
-  USING (phone = current_setting('request.jwt.claims', true)::json->>'phone');
+-- Profiles: Anyone can insert, read, and update (Simplified for Auth Flow)
+CREATE POLICY "Enable read access for all users" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON profiles FOR UPDATE USING (true);
 
 -- Vehicles: All authenticated users can view
 CREATE POLICY "All users can view vehicles"

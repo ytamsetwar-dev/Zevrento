@@ -6,7 +6,7 @@ import { PageShell, CustomerBottomNav } from '../components/Layout.jsx'
 import { IconUser, IconPhone, IconShield } from '../components/Icons.jsx'
 
 export default function CustomerProfile() {
-  const { user, verifyUserKyc } = useApp()
+  const { user, verifyUserKyc, submitKyc } = useApp()
 
   return (
     <PageShell nav={<CustomerBottomNav />}>
@@ -62,24 +62,26 @@ export default function CustomerProfile() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '0.6875rem', color: 'var(--z-text-light)', fontWeight: 500 }}>KYC Status</div>
                     <div style={{ fontWeight: 600, marginTop: '4px' }}>
-                      {user?.kyc_verified ? (
+                      {user?.kyc_status === 'VERIFIED' || user?.kyc_verified ? (
                         <span className="z-badge z-badge-emerald">Verified</span>
+                      ) : user?.kyc_status === 'PENDING' ? (
+                        <span className="z-badge z-badge-warning" style={{ background: '#FEF08A', color: '#854D0E' }}>
+                          <IconClock size={12} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                          Verification in Progress
+                        </span>
                       ) : (
-                        <span className="z-badge z-badge-warning" style={{ background: '#FEF08A', color: '#854D0E' }}>Pending</span>
+                        <span className="z-badge z-badge-danger">Not Uploaded</span>
                       )}
                     </div>
                   </div>
-                  {!user?.kyc_verified && (
+                  {(!user?.kyc_verified && user?.kyc_status !== 'PENDING') && (
                     <a 
                       href="https://wa.me/917020905724?text=Hi%2C%20I%20want%20to%20complete%20my%20KYC%20verification%20for%20my%20Zevrento%20account."
                       target="_blank"
                       rel="noopener noreferrer"
                       className="z-btn z-btn-outline" 
                       style={{ fontSize: '0.75rem', padding: '6px 12px', textDecoration: 'none', display: 'flex', alignItems: 'center' }}
-                      onClick={() => {
-                        // Simulate webhooks: auto-verify in app state after they open WhatsApp
-                        setTimeout(() => verifyUserKyc(), 1500)
-                      }}
+                      onClick={() => submitKyc()}
                     >
                       Complete KYC
                     </a>

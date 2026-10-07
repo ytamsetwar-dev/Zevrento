@@ -6,6 +6,7 @@ import { PageShell } from '../components/Layout.jsx'
 import { IconShield, IconCheck, IconSearch, IconClipboard, IconRefresh, IconScooter, IconX, IconUser, IconDollar } from '../components/Icons.jsx'
 
 const STATUS_STYLES = {
+  'PENDING_PAYMENT': 'z-badge-warning',
   [BOOKING_STATUS.PENDING_KYC]: 'z-badge-warning',
   [BOOKING_STATUS.CONFIRMED]: 'z-badge-info',
   [BOOKING_STATUS.ACTIVE]: 'z-badge-emerald',
@@ -15,6 +16,7 @@ const STATUS_STYLES = {
 }
 
 const STATUS_LABELS = {
+  'PENDING_PAYMENT': 'Pending Payment',
   [BOOKING_STATUS.PENDING_KYC]: 'Pending KYC',
   [BOOKING_STATUS.CONFIRMED]: 'Confirmed',
   [BOOKING_STATUS.ACTIVE]: 'Active',
@@ -24,7 +26,7 @@ const STATUS_LABELS = {
 }
 
 export default function AdminHubPanel() {
-  const { bookings, availabilitySlots, approveBooking, completeBooking, updateBookingStatus } = useApp()
+  const { bookings, availabilitySlots, approveBooking, completeBooking, updateBookingStatus, verifyUserKyc } = useApp()
   const [activeTab, setActiveTab] = useState('bookings') // bookings, transactions, customers, hosts
   const [tokenSearch, setTokenSearch] = useState('')
   const [activeOTP, setActiveOTP] = useState(null)
@@ -39,7 +41,7 @@ export default function AdminHubPanel() {
       if (data) setDbProfiles(data)
     }
     fetchProfiles()
-  }, [])
+  }, [activeTab]) // Re-fetch when switching tabs so data is fresh
 
   const filteredBookings = tokenSearch.trim()
     ? bookings.filter((b) => b.booking_code.toLowerCase().includes(tokenSearch.toLowerCase().replace('#', '')))
@@ -49,15 +51,24 @@ export default function AdminHubPanel() {
   const uniqueCustomers = useMemo(() => {
     const customers = {}
     dbProfiles.filter(p => p.role === 'CUSTOMER').forEach(p => {
-      customers[p.phone] = { phone: p.phone, name: p.full_name, totalRides: 0, totalSpent: 0 }
+      customers[p.phone] = { 
+        id: p.id,
+        phone: p.phone, 
+        name: p.full_name,
+        joiningDate: p.created_at,
+        kycVerified: p.kyc_verified || false,
+        isActive: false,
+        totalRides: 0, 
+        totalSpent: 0 
+      }
     })
     bookings.forEach(b => {
-      if (b.customer_phone) {
-        if (!customers[b.customer_phone]) {
-          customers[b.customer_phone] = { phone: b.customer_phone, name: 'Unknown', totalRides: 0, totalSpent: 0 }
-        }
+      if (b.customer_phone && customers[b.customer_phone]) {
         customers[b.customer_phone].totalRides += 1
         customers[b.customer_phone].totalSpent += b.total_amount
+        if (b.status === BOOKING_STATUS.ACTIVE) {
+          customers[b.customer_phone].isActive = true
+        }
       }
     })
     return Object.values(customers)
@@ -67,16 +78,29 @@ export default function AdminHubPanel() {
   const uniqueHosts = useMemo(() => {
     const hosts = {}
     dbProfiles.filter(p => p.role === 'RIDER').forEach(p => {
-      hosts[p.phone] = { phone: p.phone, name: p.full_name, totalSlots: 0, totalEarnings: 0 }
+      hosts[p.phone] = { 
+        id: p.id,
+        phone: p.phone, 
+        name: p.full_name, 
+        joiningDate: p.created_at,
+        kycVerified: p.kyc_verified || false,
+        totalSlots: 0, 
+        totalEarnings: 0,
+        hasActiveSlot: false
+      }
     })
     availabilitySlots.forEach(s => {
       if (s.host_phone) {
         if (!hosts[s.host_phone]) {
-          hosts[s.host_phone] = { phone: s.host_phone, name: 'Unknown', totalSlots: 0, totalEarnings: 0 }
+          hosts[s.host_phone] = { phone: s.host_phone, name: 'Unknown', joiningDate: s.created_at, kycVerified: false, totalSlots: 0, totalEarnings: 0, hasActiveSlot: false }
         }
         hosts[s.host_phone].totalSlots += 1
-        const hours = Math.ceil((new Date(s.end_time) - new Date(s.start_time)) / (1000 * 60 * 60))
-        hosts[s.host_phone].totalEarnings += (hours * PRICING.hostPayout)
+        if (!s.is_booked) hosts[s.host_phone].hasActiveSlot = true
+        
+        if (s.is_booked) {
+          const hours = Math.ceil((new Date(s.end_time) - new Date(s.start_time)) / (1000 * 60 * 60))
+          hosts[s.host_phone].totalEarnings += (hours * PRICING.hostPayout)
+        }
       }
     })
     return Object.values(hosts)
@@ -104,6 +128,20 @@ export default function AdminHubPanel() {
     completeBooking(booking.id)
   }
 
+  const handleDeleteCustomer = async (phone) => {
+    if (!window.confirm(`Are you sure you want to completely delete customer ${phone} from the backend?`)) return
+    
+    // Delete from Supabase profiles table
+    const { error } = await supabase.from('profiles').delete().eq('phone', phone)
+    
+    if (error) {
+      alert('Error deleting customer: ' + error.message)
+    } else {
+      setDbProfiles(prev => prev.filter(p => p.phone !== phone))
+      alert('Customer successfully deleted from database.')
+    }
+  }
+
   return (
     <PageShell title="Zevrento Hub Control">
       <div style={{ padding: '20px 16px' }}>
@@ -124,7 +162,7 @@ export default function AdminHubPanel() {
 
           {/* Tabs */}
           <div className="admin-tabs animate-fade-in-up" style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
-            {['bookings', 'transactions', 'customers', 'hosts'].map(tab => (
+            {['bookings', 'kyc', 'transactions', 'customers', 'hosts'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -204,8 +242,10 @@ export default function AdminHubPanel() {
                           <span className="value" style={{ fontFamily: "'Courier New', monospace", fontSize: '0.75rem' }}>
                             {booking.utr_number || '—'}
                           </span>
-                          <span className="label">Total</span>
-                          <span className="value" style={{ color: 'var(--z-emerald)', fontWeight: 700 }}>₹{booking.total_amount}</span>
+                          <span className="label">Payment</span>
+                          <span className="value" style={{ color: 'var(--z-emerald)', fontWeight: 700 }}>
+                            {booking.payment_mode === 'BOOKING_FEE_ONLY' ? '₹1000 Fee Paid' : `₹${booking.total_amount} Full`}
+                          </span>
                           <span className="label">Pickup</span>
                           <span className="value" style={{ fontSize: '0.6875rem' }}>{formatDateTime(booking.start_time)}</span>
                           <span className="label">Drop-off</span>
@@ -332,6 +372,49 @@ export default function AdminHubPanel() {
             </div>
           )}
 
+          {activeTab === 'kyc' && (
+            <div className="animate-fade-in-up stagger-1">
+              <div className="admin-section-title">
+                <IconShield size={14} />
+                Pending KYC Approvals
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {dbProfiles.filter(p => p.kyc_status === 'PENDING').map(c => (
+                  <div key={c.phone} className="z-card">
+                    <div className="z-card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{c.full_name}</div>
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)' }}>{c.phone}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <a 
+                          href={`https://wa.me/91${c.phone}?text=Your%20KYC%20is%20approved!%20You%20can%20now%20book.`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="z-btn z-btn-outline z-btn-sm"
+                          title="WhatsApp Approval Message"
+                        >
+                          WhatsApp
+                        </a>
+                        <button 
+                          className="z-btn z-btn-primary z-btn-sm" 
+                          onClick={async () => {
+                            await verifyUserKyc(c.phone)
+                            setDbProfiles(prev => prev.map(p => p.phone === c.phone ? { ...p, kyc_status: 'VERIFIED', kyc_verified: true } : p))
+                          }}
+                        >
+                          Approve KYC
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {dbProfiles.filter(p => p.kyc_status === 'PENDING').length === 0 && (
+                  <p style={{ color: 'var(--z-text-muted)', fontSize: '0.875rem' }}>No pending KYC approvals.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'transactions' && (
             <div className="animate-fade-in-up stagger-1">
               <div className="admin-section-title">
@@ -378,14 +461,47 @@ export default function AdminHubPanel() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {uniqueCustomers.map(c => (
-                  <div key={c.phone} className="z-card">
+                  <div key={c.phone} className="z-card" style={{ position: 'relative' }}>
                     <div className="z-card-body">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600 }}>{c.name} ({c.phone})</span>
-                        <span className="z-badge z-badge-emerald">Account Created</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--z-emerald-dark)' }}>{c.name}</span>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)', marginTop: '2px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <span><strong>Mobile:</strong> {c.phone}</span>
+                            <span><strong>Joined:</strong> {c.joiningDate ? formatDateTime(c.joiningDate).split(',')[0] : 'N/A'}</span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteCustomer(c.phone)}
+                          style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600 }}
+                        >
+                          <IconX size={14} /> Delete
+                        </button>
                       </div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)', marginTop: '8px' }}>
-                        Total Rides: {c.totalRides} | Total Spent: ₹{c.totalSpent}
+                      
+                      <div className="z-divider-dashed" style={{ margin: '12px 0' }} />
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', fontSize: '0.8125rem' }}>
+                        <div>
+                          <div className="text-muted text-xs">KYC Status</div>
+                          <div style={{ fontWeight: 600, color: c.kycVerified ? 'var(--z-emerald)' : '#D97706' }}>
+                            {c.kycVerified ? 'Verified' : 'Pending'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted text-xs">Current Status</div>
+                          <div style={{ fontWeight: 600, color: c.isActive ? 'var(--z-emerald)' : 'var(--z-text-primary)' }}>
+                            {c.isActive ? 'Active Ride' : 'Not Active'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted text-xs">Total Rides</div>
+                          <div style={{ fontWeight: 600 }}>{c.totalRides}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted text-xs">Total Spent</div>
+                          <div style={{ fontWeight: 600 }}>₹{c.totalSpent}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -404,15 +520,48 @@ export default function AdminHubPanel() {
                 Registered Hosts ({uniqueHosts.length})
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {uniqueHosts.map(h => (
-                  <div key={h.phone} className="z-card">
+                {uniqueHosts.map(c => (
+                  <div key={c.phone} className="z-card" style={{ position: 'relative' }}>
                     <div className="z-card-body">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600 }}>{h.name} ({h.phone})</span>
-                        <span className="z-badge z-badge-info">Active Host</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--z-emerald-dark)' }}>{c.name}</span>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)', marginTop: '2px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <span><strong>Mobile:</strong> {c.phone}</span>
+                            <span><strong>Joined:</strong> {c.joiningDate ? formatDateTime(c.joiningDate).split(',')[0] : 'N/A'}</span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteCustomer(c.phone)}
+                          style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600 }}
+                        >
+                          <IconX size={14} /> Delete
+                        </button>
                       </div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)', marginTop: '8px' }}>
-                        Listed Slots: {h.totalSlots} | Estimated Lifetime Earnings: ₹{h.totalEarnings}
+                      
+                      <div className="z-divider-dashed" style={{ margin: '12px 0' }} />
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', fontSize: '0.8125rem' }}>
+                        <div>
+                          <div className="text-muted text-xs">KYC Status</div>
+                          <div style={{ fontWeight: 600, color: c.kycVerified ? 'var(--z-emerald)' : '#D97706' }}>
+                            {c.kycVerified ? 'Verified' : 'Pending'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted text-xs">Current Status</div>
+                          <div style={{ fontWeight: 600, color: c.hasActiveSlot ? 'var(--z-emerald)' : 'var(--z-text-primary)' }}>
+                            {c.hasActiveSlot ? 'Has Idle EV Listed' : 'Not Hosting'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted text-xs">Total Slots</div>
+                          <div style={{ fontWeight: 600 }}>{c.totalSlots}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted text-xs">Earned Payouts</div>
+                          <div style={{ fontWeight: 600 }}>₹{c.totalEarnings}</div>
+                        </div>
                       </div>
                     </div>
                   </div>

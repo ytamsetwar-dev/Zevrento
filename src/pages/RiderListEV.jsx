@@ -5,9 +5,9 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
-import { PRICING, toInputDateTime, roundToNextHour, addHours, getHoursDiff } from '../lib/data.js'
+import { HUBS, PRICING, toInputDateTime, roundToNextHour, addHours, getHoursDiff } from '../lib/data.js'
 import { PageShell, RiderBottomNav } from '../components/Layout.jsx'
-import { IconScooter, IconBattery, IconCheck, IconChevronDown } from '../components/Icons.jsx'
+import { IconScooter, IconBattery, IconCheck, IconChevronDown, IconMapPin } from '../components/Icons.jsx'
 
 const EV_MODELS = [
   'Bounce Infinity E1',
@@ -33,6 +33,8 @@ export default function RiderListEV() {
   const [model, setModel] = useState(EV_MODELS[0])
   const [plate, setPlate] = useState('')
   const [battery, setBattery] = useState('90')
+  const [selectedArea, setSelectedArea] = useState(HUBS[0].id)
+  const [exactAddress, setExactAddress] = useState('')
   const [startTime, setStartTime] = useState(toInputDateTime(defaultStart))
   const [endTime, setEndTime] = useState(toInputDateTime(defaultEnd))
   const [submitted, setSubmitted] = useState(false)
@@ -50,6 +52,8 @@ export default function RiderListEV() {
       plate: plate.toUpperCase().trim(),
       battery: parseInt(battery) || 0,
       host_phone: user?.phone || '',
+      pickup_location: `${HUBS.find(h => h.id === selectedArea)?.name} - ${exactAddress.trim()}`,
+      hub_id: selectedArea,
       start_time: startTime,
       end_time: endTime,
     })
@@ -76,11 +80,12 @@ export default function RiderListEV() {
               Your EV is now listed for {hours} hours
             </p>
 
-            <div className="earnings-preview" style={{ marginBottom: '24px' }}>
-              <div className="headline">₹{earnings}</div>
-              <div className="sub">Estimated earnings for this slot</div>
-              <div className="earnings-formula">
-                <span>{hours}h × ₹{PRICING.hostPayout}/hr</span>
+            <div className="earnings-preview" style={{ marginBottom: '24px', background: 'var(--z-emerald-ultra-light)' }}>
+              <div className="headline" style={{ fontSize: '1.25rem' }}>Listing Details</div>
+              <div className="sub">You have hosted your EV for {hours} hours.</div>
+              <div className="earnings-formula" style={{ marginTop: '8px' }}>
+                <span style={{ fontWeight: 600 }}>Potential Earnings: up to ₹{earnings}</span>
+                <span style={{ fontSize: '0.75rem' }}>(You will be notified and paid when a customer books your EV)</span>
               </div>
             </div>
 
@@ -138,6 +143,43 @@ export default function RiderListEV() {
                       value={plate}
                       onChange={(e) => setPlate(e.target.value)}
                       style={{ textTransform: 'uppercase' }}
+                    />
+                  </div>
+
+                  <div className="z-input-group">
+                    <label className="z-input-label">
+                      <IconMapPin size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                      Major Area
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <select
+                        className="z-input"
+                        value={selectedArea}
+                        onChange={(e) => setSelectedArea(e.target.value)}
+                        style={{ appearance: 'none', paddingRight: '36px', cursor: 'pointer' }}
+                      >
+                        {HUBS.map((h) => (
+                          <option key={h.id} value={h.id}>{h.name}</option>
+                        ))}
+                      </select>
+                      <IconChevronDown
+                        size={16}
+                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--z-text-light)' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="z-input-group">
+                    <label className="z-input-label">
+                      Full Exact Address / Landmark
+                    </label>
+                    <input
+                      className="z-input"
+                      type="text"
+                      placeholder="e.g. Near Metro Pillar 123"
+                      value={exactAddress}
+                      onChange={(e) => setExactAddress(e.target.value)}
+                      required
                     />
                   </div>
 
@@ -205,31 +247,22 @@ export default function RiderListEV() {
 
             {/* Earnings Preview */}
             {hours >= 1 && (
-              <div className="earnings-preview animate-fade-in-up stagger-2">
-                <div className="headline">₹{earnings}</div>
+              <div className="earnings-preview animate-fade-in-up stagger-2" style={{ background: 'var(--z-emerald-ultra-light)' }}>
+                <div className="headline" style={{ fontSize: '1.25rem', color: 'var(--z-emerald-dark)' }}>Host to Earn!</div>
                 <div className="sub">
-                  You earn ₹{PRICING.hostPayout}/hour! Listing {hours} idle hours = ₹{earnings}/day
+                  When a customer books, you earn ₹{PRICING.hostPayout}/hour.
                 </div>
                 <div className="earnings-formula">
-                  <span>Customer pays ₹{PRICING.baseRate}/hr</span>
-                  <span>→</span>
-                  <span>Taxes & Platform Fee ₹{PRICING.platformFee}/hr</span>
-                  <span>→</span>
-                  <span style={{ fontWeight: 700 }}>You receive ₹{PRICING.hostPayout}/hr</span>
+                  <span>If booked for full {hours}h = ₹{earnings} Potential</span>
                 </div>
-                {hours >= 6 && (
-                  <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--z-emerald-dark)', fontWeight: 500 }}>
-                    🎉 Earn ₹12,000+/month while resting or when your EV is idle!
-                  </div>
-                )}
               </div>
             )}
 
             {/* Hub Notice */}
             <div className="hub-notice animate-fade-in-up stagger-3">
-              <strong>📍 Hub-and-Spoke Agreement</strong>
-              Drop your EV at the Zevrento Central Hub before your slot starts.
-              We inspect the vehicle, manage customer handovers, and disburse payouts directly to your account.
+              <strong>📍 Direct Handover (P2P)</strong>
+              The customer will come to your entered pickup location to collect the vehicle.
+              Ensure you verify the customer's KYC and booking code before handing over the keys.
             </div>
 
             {/* Submit */}

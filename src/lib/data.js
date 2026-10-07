@@ -87,9 +87,11 @@ export const VEHICLES = [
 // HUBS
 // =============================================
 export const HUBS = [
-  { id: 'hub1', name: 'Central Hub — Ameerpet', address: 'Zevrento Station, Ameerpet Metro Exit 2, Hyderabad' },
-  { id: 'hub2', name: 'Tech Hub — Gachibowli', address: 'Zevrento Point, DLF Cyber City, Gachibowli' },
-  { id: 'hub3', name: 'City Hub — Secunderabad', address: 'Zevrento Dock, Clock Tower Junction, Secunderabad' },
+  { id: 'area1', name: 'Ameerpet', address: 'Ameerpet Metro Station, Hyderabad' },
+  { id: 'area2', name: 'Begumpet', address: 'Begumpet, Hyderabad' },
+  { id: 'area3', name: 'Yellareddygudda', address: 'Yellareddygudda, Hyderabad' },
+  { id: 'area4', name: 'Hitech City', address: 'Hitech City Metro, Hyderabad' },
+  { id: 'area5', name: 'Madhapur', address: 'Madhapur Junction, Hyderabad' },
 ]
 
 // =============================================

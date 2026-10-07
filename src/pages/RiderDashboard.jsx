@@ -16,11 +16,18 @@ export default function RiderDashboard() {
   const stats = useMemo(() => {
     const activeSlots = availabilitySlots.filter((s) => !s.is_booked).length
     const totalSlots = availabilitySlots.length
+    
+    // Calculate total hours listed vs booked
     const totalHours = availabilitySlots.reduce((sum, s) => {
       const diff = (new Date(s.end_time) - new Date(s.start_time)) / (1000 * 60 * 60)
       return sum + Math.ceil(diff)
     }, 0)
-    const totalPayouts = totalHours * PRICING.hostPayout
+
+    // Only count payouts for BOOKED slots
+    const totalPayouts = availabilitySlots.filter(s => s.is_booked).reduce((sum, s) => {
+      const diff = (new Date(s.end_time) - new Date(s.start_time)) / (1000 * 60 * 60)
+      return sum + (Math.ceil(diff) * PRICING.hostPayout)
+    }, 0)
 
     return { activeSlots, totalSlots, totalPayouts, totalHours }
   }, [availabilitySlots])
@@ -64,7 +71,7 @@ export default function RiderDashboard() {
             </div>
             <div className="z-stat-card">
               <div className="z-stat-value">₹{stats.totalPayouts}</div>
-              <div className="z-stat-label">Total Payouts</div>
+              <div className="z-stat-label">Earned Payouts</div>
             </div>
             <div className="z-stat-card">
               <div className="z-stat-value">{stats.totalHours}h</div>
@@ -155,8 +162,17 @@ export default function RiderDashboard() {
                           display: 'flex', justifyContent: 'space-between',
                           fontSize: '0.8125rem',
                         }}>
-                          <span className="text-muted">{hours}h × ₹{PRICING.hostPayout}/hr</span>
-                          <span style={{ fontWeight: 700, color: 'var(--z-emerald)' }}>₹{hours * PRICING.hostPayout}</span>
+                          {slot.is_booked ? (
+                            <>
+                              <span className="text-muted">{hours}h Booked × ₹{PRICING.hostPayout}/hr</span>
+                              <span style={{ fontWeight: 700, color: 'var(--z-emerald)' }}>₹{hours * PRICING.hostPayout} Earned</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-muted">{hours}h Available for Booking</span>
+                              <span style={{ fontWeight: 600, color: 'var(--z-text-light)' }}>Potential: ₹{hours * PRICING.hostPayout}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

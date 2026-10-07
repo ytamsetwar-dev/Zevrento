@@ -23,7 +23,13 @@ export default function LoginPage() {
     setError('')
 
     if (!userId.trim() || !password.trim()) {
-      setError('Please enter your mobile number and password.')
+      setError('Please enter your Email ID and password.')
+      return
+    }
+
+    // Prevent users from trying to log in with mobile number if they created an account with email
+    if (/^\d{10}$/.test(userId.trim()) && !checkAdminCredentials(userId.trim(), password.trim()) && !checkDemoProfile(userId.trim(), password.trim())) {
+      setError('Please use your Email ID to log in, not your mobile number.')
       return
     }
 
@@ -104,7 +110,7 @@ export default function LoginPage() {
 
           <div className="z-input-group">
             <label className="z-input-label" htmlFor="login-userid">
-              Email ID (or Demo Mobile)
+              Email ID
             </label>
             <div className="z-input-icon">
               <span className="icon"><IconPhone size={18} /></span>
