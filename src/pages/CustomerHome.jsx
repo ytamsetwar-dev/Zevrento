@@ -7,10 +7,10 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
 import { HUBS, PRICING, getHoursDiff, roundToNextHour, addHours, toInputDateTime, calculateFare } from '../lib/data.js'
 import { PageShell, CustomerBottomNav } from '../components/Layout.jsx'
-import { IconMapPin, IconClock, IconCalendar, IconSearch, IconZap, IconBattery, IconChevronDown } from '../components/Icons.jsx'
+import { IconMapPin, IconClock, IconCalendar, IconSearch, IconZap, IconBattery, IconChevronDown, IconRefresh } from '../components/Icons.jsx'
 
 export default function CustomerHome() {
-  const { vehicles, availabilitySlots, user } = useApp()
+  const { vehicles, availabilitySlots, user, refreshData } = useApp()
   const navigate = useNavigate()
 
   // Search state
@@ -231,7 +231,14 @@ export default function CustomerHome() {
             </div>
             
             {/* Sorting/Filtering */}
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                onClick={refreshData}
+                style={{ background: 'var(--z-surface)', border: '1px solid var(--z-border)', padding: '6px 10px', borderRadius: '20px', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--z-text-primary)' }}
+                title="Refresh Live EVs"
+              >
+                <IconRefresh size={14} /> Refresh
+              </button>
               <select 
                 className="z-input" 
                 style={{ padding: '6px 12px', fontSize: '0.8125rem', height: 'auto', borderRadius: '20px' }}
