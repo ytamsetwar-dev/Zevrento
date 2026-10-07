@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS public.availability_slots (
     battery numeric,
     host_phone text,
     start_time text,
-    end_time text
+    end_time text,
+    hub_id text,
+    pickup_location text
 );
 
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
@@ -64,6 +66,10 @@ CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT U
 CREATE POLICY "Enable insert for all users" ON public.profiles FOR INSERT WITH CHECK (true);
 CREATE POLICY "Enable update for all users" ON public.profiles FOR UPDATE USING (true);
 CREATE POLICY "Enable delete for all users" ON public.profiles FOR DELETE USING (true);
+
+-- Fix Availability Slots Bug (missing columns)
+ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS hub_id text;
+ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS pickup_location text;
 
 -- Phase 1 Schema Updates
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS kyc_status text DEFAULT 'PENDING';
