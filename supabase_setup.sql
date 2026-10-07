@@ -36,9 +36,17 @@ CREATE TABLE IF NOT EXISTS public.availability_slots (
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.availability_slots ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "insert_bookings" ON public.bookings;
+DROP POLICY IF EXISTS "select_bookings" ON public.bookings;
+DROP POLICY IF EXISTS "update_bookings" ON public.bookings;
+
 CREATE POLICY "insert_bookings" ON public.bookings FOR INSERT WITH CHECK (true);
 CREATE POLICY "select_bookings" ON public.bookings FOR SELECT USING (true);
 CREATE POLICY "update_bookings" ON public.bookings FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "insert_slots" ON public.availability_slots;
+DROP POLICY IF EXISTS "select_slots" ON public.availability_slots;
+DROP POLICY IF EXISTS "update_slots" ON public.availability_slots;
 
 CREATE POLICY "insert_slots" ON public.availability_slots FOR INSERT WITH CHECK (true);
 CREATE POLICY "select_slots" ON public.availability_slots FOR SELECT USING (true);
@@ -47,6 +55,11 @@ CREATE POLICY "update_slots" ON public.availability_slots FOR UPDATE USING (true
 -- Fix Profiles Login Bug
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
+DROP POLICY IF EXISTS "Enable insert for all users" ON public.profiles;
+DROP POLICY IF EXISTS "Enable update for all users" ON public.profiles;
+DROP POLICY IF EXISTS "Enable delete for all users" ON public.profiles;
+
 CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Enable insert for all users" ON public.profiles FOR INSERT WITH CHECK (true);
 CREATE POLICY "Enable update for all users" ON public.profiles FOR UPDATE USING (true);
