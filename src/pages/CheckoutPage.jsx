@@ -15,11 +15,9 @@ export default function CheckoutPage() {
   const { createBooking, user } = useApp()
   const state = location.state
 
-  const [bookingResult, setBookingResult] = useState(null)
-  const [timerSeconds, setTimerSeconds] = useState(600) // 10 min
-  const [tncAccepted, setTncAccepted] = useState(false)
-  const [showRazorpay, setShowRazorpay] = useState(false)
-  const [paymentMode, setPaymentMode] = useState('FULL') // FULL or FEE
+  const [showUtrModal, setShowUtrModal] = useState(false)
+  const [utrInput, setUtrInput] = useState('')
+  const [paymentMode, setPaymentMode] = useState('FULL') // FULL or DEPOSIT
   const [paymentProcessing, setPaymentProcessing] = useState(false)
   const [booked, setBooked] = useState(false)
 
@@ -55,13 +53,23 @@ export default function CheckoutPage() {
 
   const handleInitiatePayment = (mode) => {
     setPaymentMode(mode)
-    setShowRazorpay(true)
+    setShowUtrModal(true)
+    
+    // Trigger UPI deep link
+    const amount = mode === 'DEPOSIT' ? 500 : fare.total
+    const upiId = 'YOUR_UPI_ID@okicici' // Change this to your actual UPI ID
+    const upiLink = `upi://pay?pa=${upiId}&pn=Zevrento&am=${amount}&cu=INR`
+    window.location.href = upiLink
   }
 
-  const handleRazorpaySuccess = () => {
+  const handleConfirmUtr = () => {
+    if (utrInput.trim().length < 12) {
+      alert("Please enter the valid 12-digit UTR/Reference Number from your payment app.")
+      return
+    }
+    
     setPaymentProcessing(true)
     
-    // Step 1: Create booking as PENDING_PAYMENT
     const booking = createBooking({
       customer_phone: user?.phone || '',
       vehicle_id: vehicle.id,
@@ -73,24 +81,23 @@ export default function CheckoutPage() {
       deposit: fare.deposit,
       platform_fee: fare.platformFeeTotal,
       host_payout: fare.hostPayoutTotal,
-      utr_number: 'rzp_mock_' + Date.now(),
-      payment_mode: paymentMode === 'FEE' ? 'BOOKING_FEE_ONLY' : 'FULL_PAYMENT',
+      utr_number: utrInput.trim(),
+      payment_mode: paymentMode === 'DEPOSIT' ? 'DEPOSIT_ONLY' : 'FULL_PAYMENT',
       duration,
-      status: 'PENDING_PAYMENT'
+      status: 'CONFIRMED'
     })
 
-    // Step 2: Simulate Webhook changing status to CONFIRMED
     setTimeout(() => {
-      setBookingResult({ ...booking, status: 'CONFIRMED' })
+      setBookingResult(booking)
       setPaymentProcessing(false)
       setBooked(true)
-      setShowRazorpay(false)
-    }, 2000)
+      setShowUtrModal(false)
+    }, 1500)
   }
 
   const whatsappMessage = bookingResult
     ? encodeURIComponent(
-        `🛵 *Zevrento Booking Confirmed!*\n\nBooking Token: ${bookingResult.booking_code}\nVehicle: ${vehicle.model}\nPickup Location: ${hub.name}\nPickup Time: ${formatDateTime(pickupTime)}\nDuration: ${duration}h\nPayment: ${paymentMode === 'FEE' ? '₹1000 Booking Fee Paid' : `₹${fare.total} Fully Paid`}\n\nThank you for choosing Zevrento!`
+        `🛵 *Zevrento Booking Confirmed!*\n\nBooking Token: ${bookingResult.booking_code}\nVehicle: ${vehicle.model}\nPickup Location: ${hub.name}\nPickup Time: ${formatDateTime(pickupTime)}\nDuration: ${duration}h\nPayment: ${paymentMode === 'DEPOSIT' ? '₹500 Deposit Paid' : `₹${fare.total} Fully Paid`}\n\nThank you for choosing Zevrento!`
       )
     : ''
 
@@ -302,12 +309,12 @@ export default function CheckoutPage() {
               <div className="z-card" style={{ marginBottom: '16px', background: 'var(--z-emerald-ultra-light)' }}>
                 <div className="z-card-body" style={{ fontSize: '0.75rem', color: 'var(--z-text-primary)' }}>
                   <div style={{ fontWeight: 600, marginBottom: '8px' }}>Terms & Conditions:</div>
-                  <ul style={{ paddingLeft: '16px', margin: '0 0 12px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <li>Battery percentage & scooter health must be verified by customer and EV owner. Zevrento is not responsible.</li>
-                    <li>As there is unlimited km, for battery swapping Zevrento and EV owner are not responsible.</li>
-                    <li>If any damage is caused, the full deposit is non-refundable. Verify before and after ride.</li>
+                  <ul style={{ paddingLeft: '16px', margin: '0 0 12px 0', display: 'flex', flexDirection: 'column', gap: '6px', lineHeight: 1.5 }}>
+                    <li><strong>Vehicle Inspection:</strong> Customers must verify the battery percentage and physical condition of the EV with the host prior to the ride. Zevrento acts solely as a platform and is not liable for undocumented issues.</li>
+                    <li><strong>Battery & Range:</strong> While rentals include unlimited kilometers, customers are responsible for managing battery levels and charging during the rental period.</li>
+                    <li><strong>Damage Policy:</strong> Any damages incurred during the rental period will result in the forfeiture of the security deposit. Please inspect the vehicle thoroughly before and after your ride.</li>
                   </ul>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', marginTop: '12px' }}>
                     <input 
                       type="checkbox" 
                       checked={tncAccepted} 
@@ -322,15 +329,15 @@ export default function CheckoutPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <button
                   className="z-btn z-btn-outline z-btn-full z-btn-lg"
-                  onClick={() => handleInitiatePayment('FEE')}
+                  onClick={() => handleInitiatePayment('DEPOSIT')}
                   disabled={timerSeconds === 0 || !tncAccepted}
                   style={{ display: 'flex', flexDirection: 'column', padding: '12px', height: 'auto', gap: '4px', background: '#F8FAFC' }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
-                    <IconShield size={18} /> Pay ₹1,000 Booking Fee Now
+                    <IconShield size={18} /> Pay ₹500 Deposit & Book
                   </span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)', fontWeight: 500 }}>
-                    Reserve slot instantly. Pay remaining ₹{fare.total - 1000} at pickup. (Bypasses UPI limits)
+                    Pay the deposit now to reserve. Pay remaining ₹{fare.total - 500} at pickup.
                   </span>
                 </button>
 
@@ -344,7 +351,7 @@ export default function CheckoutPage() {
                     Pay Full Amount (₹{fare.total})
                   </span>
                   <span style={{ fontSize: '0.75rem', opacity: 0.9, fontWeight: 500 }}>
-                    Complete payment now via Cards/NetBanking/UPI
+                    Directly opens your UPI App (GPay/PhonePe)
                   </span>
                 </button>
               </div>
@@ -353,8 +360,8 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* RAZORPAY MOCK MODAL */}
-      {showRazorpay && (
+      {/* UPI UTR VERIFICATION MODAL */}
+      {showUtrModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.7)', zIndex: 9999,
@@ -364,17 +371,17 @@ export default function CheckoutPage() {
             background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '380px',
             overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ background: '#02042B', padding: '20px', color: '#fff', textAlign: 'center' }}>
+            <div style={{ background: 'var(--z-emerald-dark)', padding: '20px', color: '#fff', textAlign: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                <IconZap size={20} /> Razorpay Test
+                <IconZap size={20} /> Verify UPI Payment
               </h3>
-              <div style={{ opacity: 0.8, fontSize: '0.875rem', marginTop: '4px' }}>Zevrento Rentals</div>
+              <div style={{ opacity: 0.9, fontSize: '0.875rem', marginTop: '4px' }}>Please complete payment in your UPI app</div>
             </div>
             <div style={{ padding: '24px' }}>
-              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                 <div style={{ fontSize: '0.875rem', color: '#64748B' }}>Amount Payable</div>
-                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0F172A' }}>
-                  ₹{paymentMode === 'FEE' ? '1,000.00' : `${fare.total}.00`}
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--z-emerald)' }}>
+                  ₹{paymentMode === 'DEPOSIT' ? '500.00' : `${fare.total}.00`}
                 </div>
               </div>
 
@@ -382,28 +389,42 @@ export default function CheckoutPage() {
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div className="spinner" style={{
                     width: '32px', height: '32px', margin: '0 auto 16px',
-                    border: '3px solid #E2E8F0', borderTopColor: '#3B82F6',
+                    border: '3px solid var(--z-emerald-light)', borderTopColor: 'var(--z-emerald)',
                     borderRadius: '50%', animation: 'spin 1s linear infinite'
                   }} />
-                  <div style={{ fontWeight: 600, color: '#334155' }}>Processing Payment...</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Waiting for Webhook confirmation</div>
+                  <div style={{ fontWeight: 600, color: '#334155' }}>Verifying Transaction...</div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <button 
-                    className="z-btn" 
-                    style={{ background: '#22C55E', color: 'white', width: '100%', padding: '12px', fontWeight: 700 }}
-                    onClick={handleRazorpaySuccess}
-                  >
-                    Simulate Successful Payment
-                  </button>
-                  <button 
-                    className="z-btn z-btn-outline" 
-                    style={{ width: '100%', padding: '12px', fontWeight: 600 }}
-                    onClick={() => setShowRazorpay(false)}
-                  >
-                    Cancel
-                  </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div className="z-input-group">
+                    <label className="z-input-label" style={{ fontSize: '0.8125rem' }}>Enter 12-Digit UTR / Reference No.</label>
+                    <input
+                      className="z-input"
+                      type="text"
+                      placeholder="e.g. 312345678901"
+                      value={utrInput}
+                      onChange={(e) => setUtrInput(e.target.value.replace(/[^0-9]/g, ''))}
+                      maxLength={12}
+                      style={{ fontSize: '1.1rem', letterSpacing: '2px', textAlign: 'center' }}
+                    />
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button 
+                      className="z-btn z-btn-primary" 
+                      style={{ width: '100%', padding: '12px', fontWeight: 700 }}
+                      onClick={handleConfirmUtr}
+                    >
+                      Confirm Payment
+                    </button>
+                    <button 
+                      className="z-btn z-btn-outline" 
+                      style={{ width: '100%', padding: '12px', fontWeight: 600 }}
+                      onClick={() => setShowUtrModal(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
