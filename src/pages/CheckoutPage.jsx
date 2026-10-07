@@ -15,6 +15,9 @@ export default function CheckoutPage() {
   const { createBooking, user } = useApp()
   const state = location.state
 
+  const [bookingResult, setBookingResult] = useState(null)
+  const [timerSeconds, setTimerSeconds] = useState(600) // 10 min
+  const [tncAccepted, setTncAccepted] = useState(false)
   const [showUtrModal, setShowUtrModal] = useState(false)
   const [utrInput, setUtrInput] = useState('')
   const [paymentMode, setPaymentMode] = useState('FULL') // FULL or DEPOSIT
