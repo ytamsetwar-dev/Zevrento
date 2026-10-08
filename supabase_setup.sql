@@ -74,4 +74,5 @@ ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS pickup_location t
 
 -- Phase 1 Schema Updates
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS kyc_status text DEFAULT 'PENDING';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_mode text DEFAULT 'UPI';

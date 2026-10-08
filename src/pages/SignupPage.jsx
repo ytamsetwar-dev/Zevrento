@@ -74,6 +74,7 @@ export default function SignupPage() {
       name: `${firstName} ${lastName}`,
       phone: mobile,
       role: role,
+      address: '',
     })
 
     if (role === 'RIDER') {

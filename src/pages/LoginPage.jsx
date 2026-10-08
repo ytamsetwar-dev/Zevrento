@@ -71,6 +71,7 @@ export default function LoginPage() {
           name: profile.full_name,
           phone: profile.phone,
           role: profile.role,
+          address: profile.address || '',
         })
 
         if (profile.role === 'RIDER') {

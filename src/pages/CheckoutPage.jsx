@@ -12,7 +12,7 @@ import { IconMapPin, IconClock, IconCheck, IconWhatsApp, IconShield, IconZap } f
 export default function CheckoutPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { createBooking, user } = useApp()
+  const { createBooking, markSlotAsBooked, user } = useApp()
   const state = location.state
 
   const [bookingResult, setBookingResult] = useState(null)
@@ -96,6 +96,7 @@ export default function CheckoutPage() {
       setPaymentProcessing(false)
       setBooked(true)
       setShowUtrModal(false)
+      markSlotAsBooked(vehicle.id)
     }, 1500)
   }
 

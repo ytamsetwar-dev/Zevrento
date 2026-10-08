@@ -207,6 +207,16 @@ export function AppProvider({ children }) {
     })
   }, [])
 
+  const markSlotAsBooked = useCallback((slotId) => {
+    setAvailabilitySlots((prev) =>
+      prev.map((s) => (s.id === slotId ? { ...s, is_booked: true } : s))
+    )
+    
+    supabase.from('availability_slots').update({ is_booked: true }).eq('id', slotId).then(({error}) => {
+      if (error) console.error('Supabase update slot error:', error)
+    })
+  }, [])
+
   const value = {
     // Auth
     user,
@@ -228,6 +238,7 @@ export function AppProvider({ children }) {
     completeBooking,
     publishSlot,
     deleteSlot,
+    markSlotAsBooked,
     refreshData,
   }
 

@@ -1,4 +1,5 @@
 -- Fix Bookings Table (Add missing columns that cause inserts to fail)
+ALTER TABLE public.bookings ALTER COLUMN id TYPE text USING id::text;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS utr_number text;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS deposit numeric;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS platform_fee numeric;
