@@ -138,8 +138,16 @@ export function AppProvider({ children }) {
 
   // ---- BOOKINGS ----
   const createBooking = useCallback((bookingData) => {
+    // We use a valid UUID here because Supabase bookings table uses uuid for the id column.
+    const bookingId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+      ? crypto.randomUUID() 
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+
     const booking = {
-      id: `b_${Date.now()}`,
+      id: bookingId,
       booking_code: generateBookingCode(),
       status: BOOKING_STATUS.PENDING_KYC,
       pickup_otp: null,
