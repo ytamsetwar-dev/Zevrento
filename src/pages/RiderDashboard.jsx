@@ -53,7 +53,7 @@ export default function RiderDashboard() {
                   <div>
                     <div style={{ fontWeight: 700, color: '#854D0E', fontSize: '0.9375rem' }}>Upcoming Booking!</div>
                     <div style={{ fontSize: '0.8125rem', color: '#A16207', marginTop: '4px', lineHeight: 1.5 }}>
-                      You have an upcoming booking. Please drop off your <b>{bookedSlots[0].model}</b> at the Central Hub at least <b>10 mins before</b> the pickup time.
+                      You have an upcoming booking! The customer will come directly to your location to pick up the <b>{bookedSlots[0].model}</b>. Please keep the vehicle ready at least <b>10 mins before</b> the pickup time.
                     </div>
                   </div>
                 </div>
