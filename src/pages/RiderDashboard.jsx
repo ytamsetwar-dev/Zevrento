@@ -45,21 +45,66 @@ export default function RiderDashboard() {
           </div>
 
           {/* Actionable Notifications */}
-          {bookedSlots.length > 0 && (
-            <div className="z-card animate-fade-in-up stagger-1" style={{ marginBottom: '24px', background: '#FEF9C3', borderColor: '#FDE047' }}>
-              <div className="z-card-body">
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                  <IconZap size={24} style={{ color: '#CA8A04', flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#854D0E', fontSize: '0.9375rem' }}>Upcoming Booking!</div>
-                    <div style={{ fontSize: '0.8125rem', color: '#A16207', marginTop: '4px', lineHeight: 1.5 }}>
-                      You have an upcoming booking! The customer will come directly to your location to pick up the <b>{bookedSlots[0].model}</b>. Please keep the vehicle ready at least <b>10 mins before</b> the pickup time.
+          {bookedSlots.length > 0 && bookedSlots.map(slot => {
+            // Find the active booking for this slot
+            const activeBooking = bookings.find(b => b.vehicle_id === slot.id && (b.status === 'CONFIRMED' || b.status === 'ACTIVE'))
+            if (!activeBooking) return null;
+
+            return (
+              <div key={slot.id} className="z-card animate-fade-in-up stagger-1" style={{ marginBottom: '24px', background: '#FEF9C3', borderColor: '#FDE047' }}>
+                <div className="z-card-body">
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <IconZap size={24} style={{ color: '#CA8A04', flexShrink: 0 }} />
+                    <div style={{ width: '100%' }}>
+                      <div style={{ fontWeight: 700, color: '#854D0E', fontSize: '0.9375rem' }}>Upcoming Booking!</div>
+                      <div style={{ fontSize: '0.8125rem', color: '#A16207', marginTop: '4px', lineHeight: 1.5 }}>
+                        The customer will come directly to your location to pick up the <b>{slot.model}</b>. Please keep it ready.
+                      </div>
+
+                      {activeBooking.status === 'CONFIRMED' && (
+                        <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.5)', borderRadius: '8px' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#854D0E', marginBottom: '8px' }}>
+                            Verify Customer OTP to handover:
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                              type="text"
+                              maxLength={6}
+                              placeholder="Enter OTP"
+                              className="z-input"
+                              style={{ width: '120px', background: '#fff' }}
+                              id={`otp-input-${activeBooking.id}`}
+                            />
+                            <button 
+                              className="z-btn z-btn-primary" 
+                              style={{ flex: 1 }}
+                              onClick={() => {
+                                const input = document.getElementById(`otp-input-${activeBooking.id}`).value
+                                if (input === activeBooking.pickup_otp) {
+                                  updateBookingStatus(activeBooking.id, 'ACTIVE')
+                                  alert("OTP Verified! Handover complete. Have a safe ride.")
+                                } else {
+                                  alert("Invalid OTP! Please check with the customer.")
+                                }
+                              }}
+                            >
+                              Verify & Handover
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {activeBooking.status === 'ACTIVE' && (
+                        <div style={{ marginTop: '12px', padding: '8px 12px', background: '#DCFCE7', color: '#166534', borderRadius: '8px', fontSize: '0.8125rem', fontWeight: 600 }}>
+                          ✅ OTP Verified. Vehicle is currently with the customer.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })}
 
           {/* Stats Grid */}
           <div className="z-stat-grid animate-fade-in-up stagger-1" style={{ marginBottom: '24px' }}>
