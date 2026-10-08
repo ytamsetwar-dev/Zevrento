@@ -91,12 +91,40 @@ export default function CheckoutPage() {
       status: 'CONFIRMED'
     })
 
-    setTimeout(() => {
+    setTimeout(async () => {
       setBookingResult(booking)
       setPaymentProcessing(false)
       setBooked(true)
       setShowUtrModal(false)
       markSlotAsBooked(vehicle.id)
+
+      // Send Push Notifications via OneSignal REST API
+      const adminPhone = "7020905724"
+      const riderPhone = vehicle.host_phone || vehicle.host_id
+      
+      const targetPhones = [adminPhone, `+91${adminPhone}`, riderPhone, `+91${riderPhone}`].filter(Boolean)
+
+      try {
+        await fetch("https://onesignal.com/api/v1/notifications", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Basic ${import.meta.env.VITE_ONESIGNAL_REST_KEY}`
+          },
+          body: JSON.stringify({
+            app_id: "8bacef9e-1033-4c51-a72c-ce13f5ddae5f",
+            include_aliases: {
+              external_id: targetPhones
+            },
+            target_channel: "push",
+            headings: { en: "Zevrento: New Booking!" },
+            contents: { en: `Vehicle ${vehicle.model} has been booked! Please check your dashboard for details.` }
+          })
+        })
+      } catch (err) {
+        console.error("Push Notification Failed:", err)
+      }
+
     }, 1500)
   }
 

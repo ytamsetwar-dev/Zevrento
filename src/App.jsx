@@ -3,6 +3,8 @@
 // Role-based routing with protected routes
 // =============================================
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import OneSignal from 'react-onesignal'
 import { AppProvider, useApp } from './lib/store.jsx'
 
 // Pages
@@ -50,6 +52,31 @@ function PublicRoute({ children }) {
 
 // ---- MAIN APP ----
 function AppRoutes() {
+  const { user } = useApp()
+
+  useEffect(() => {
+    async function initOneSignal() {
+      try {
+        await OneSignal.init({
+          appId: "8bacef9e-1033-4c51-a72c-ce13f5ddae5f",
+          allowLocalhostAsSecureOrigin: true,
+        })
+        OneSignal.Slidedown.promptPush()
+      } catch (err) {
+        console.error("OneSignal init error:", err)
+      }
+    }
+    initOneSignal()
+  }, [])
+
+  useEffect(() => {
+    if (user?.phone) {
+      OneSignal.login(user.phone)
+    } else {
+      OneSignal.logout()
+    }
+  }, [user?.phone])
+
   return (
     <Routes>
       {/* Login & Signup */}
