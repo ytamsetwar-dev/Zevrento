@@ -4,10 +4,10 @@
 import { useApp } from '../lib/store.jsx'
 import { PRICING } from '../lib/data.js'
 import { PageShell, RiderBottomNav } from '../components/Layout.jsx'
-import { IconUser, IconPhone, IconScooter, IconDollar } from '../components/Icons.jsx'
+import { IconUser, IconPhone, IconScooter, IconDollar, IconMapPin } from '../components/Icons.jsx'
 
 export default function RiderProfile() {
-  const { user, availabilitySlots, bookings } = useApp()
+  const { user, availabilitySlots, bookings, updateProfile } = useApp()
 
   // Calculate actual earnings from completed bookings
   const lifetimeEarnings = bookings
@@ -50,6 +50,39 @@ export default function RiderProfile() {
                   <div>
                     <div style={{ fontSize: '0.6875rem', color: 'var(--z-text-light)', fontWeight: 500 }}>Phone</div>
                     <div style={{ fontWeight: 600 }}>{user?.phone || '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="z-card">
+                <div className="z-card-body">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        width: '40px', height: '40px',
+                        background: 'var(--z-off-white)',
+                        borderRadius: '10px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <IconMapPin size={18} style={{ color: 'var(--z-text-muted)' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--z-text-light)', fontWeight: 500 }}>Default Pickup Address</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{user?.address || 'No address set'}</div>
+                      </div>
+                    </div>
+                    <button 
+                      className="z-btn z-btn-sm" 
+                      style={{ background: 'var(--z-surface)', border: '1px solid var(--z-border)', color: 'var(--z-text-primary)' }}
+                      onClick={() => {
+                        const addr = window.prompt('Enter your default pickup address:', user?.address || '')
+                        if (addr !== null && updateProfile) {
+                          updateProfile({ address: addr })
+                        }
+                      }}
+                    >
+                      Edit
+                    </button>
                   </div>
                 </div>
               </div>

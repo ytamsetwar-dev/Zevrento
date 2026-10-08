@@ -6,5 +6,8 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS host_payout numeric;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_mode text;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS duration numeric;
 
+-- Fix Profiles Table
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS address text;
+
 -- Refresh schema cache
 NOTIFY pgrst, 'reload schema';

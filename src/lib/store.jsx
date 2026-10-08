@@ -40,6 +40,7 @@ export function AppProvider({ children }) {
               ...prev,
               kyc_status: data.kyc_status,
               kyc_verified: data.kyc_status === 'VERIFIED' || data.kyc_verified,
+              address: data.address || prev.address || '',
             } : null)
           }
         }
@@ -117,6 +118,13 @@ export function AppProvider({ children }) {
     setUser((prev) => prev ? { ...prev, kyc_status: 'PENDING' } : null)
     if (user?.phone) {
       await supabase.from('profiles').update({ kyc_status: 'PENDING' }).eq('phone', user.phone)
+    }
+  }, [user])
+
+  const updateProfile = useCallback(async (updates) => {
+    setUser((prev) => prev ? { ...prev, ...updates } : null)
+    if (user?.phone) {
+      await supabase.from('profiles').update(updates).eq('phone', user.phone)
     }
   }, [user])
 
@@ -207,6 +215,7 @@ export function AppProvider({ children }) {
     logout,
     verifyUserKyc,
     submitKyc,
+    updateProfile,
     // Data
     vehicles,
     setVehicles,

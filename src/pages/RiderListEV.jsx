@@ -34,7 +34,7 @@ export default function RiderListEV() {
   const [plate, setPlate] = useState('')
   const [battery, setBattery] = useState('90')
   const [selectedArea, setSelectedArea] = useState(HUBS[0].id)
-  const [exactAddress, setExactAddress] = useState('')
+  const [exactAddress, setExactAddress] = useState(user?.address || '')
   const [startTime, setStartTime] = useState(toInputDateTime(defaultStart))
   const [endTime, setEndTime] = useState(toInputDateTime(defaultEnd))
   const [submitted, setSubmitted] = useState(false)

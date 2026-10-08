@@ -28,8 +28,9 @@ export default function CustomerHome() {
   const selectedHub = HUBS.find((h) => h.id === hub)
 
   const availableVehicles = useMemo(() => {
+    const now = new Date();
     let hosts = availabilitySlots
-      .filter((s) => !s.is_booked)
+      .filter((s) => new Date(s.end_time) > now)
       .map((s) => {
         const durationAvailable = getHoursDiff(s.start_time, s.end_time)
         return {
@@ -46,7 +47,8 @@ export default function CustomerHome() {
           start_time: s.start_time,
           end_time: s.end_time,
           hub_id: s.hub_id,
-          pickup_location: s.pickup_location
+          pickup_location: s.pickup_location,
+          is_booked: s.is_booked
         }
       })
 
@@ -112,7 +114,7 @@ export default function CustomerHome() {
           backdropFilter: 'blur(5px)'
         }}>
           <div className="animate-fade-in-up" style={{
-            background: 'var(--z-bg)', borderRadius: '24px', padding: '32px 24px',
+            background: '#ffffff', borderRadius: '24px', padding: '32px 24px',
             textAlign: 'center', maxWidth: '380px', width: '100%',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
             border: '1px solid var(--z-border)'
@@ -120,8 +122,8 @@ export default function CustomerHome() {
             <div style={{ background: 'var(--z-emerald-ultra-light)', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
                <IconZap size={32} style={{ color: 'var(--z-emerald)' }} />
             </div>
-            <h2 style={{ marginBottom: '12px', fontSize: '1.5rem', fontWeight: 800 }}>Welcome to Zevrento!</h2>
-            <p style={{ color: 'var(--z-text-primary)', fontSize: '0.9375rem', lineHeight: '1.6', marginBottom: '24px', opacity: 0.9 }}>
+            <h2 style={{ marginBottom: '12px', fontSize: '1.5rem', fontWeight: 800, color: '#111827' }}>Welcome to Zevrento!</h2>
+            <p style={{ color: '#4B5563', fontSize: '0.9375rem', lineHeight: '1.6', marginBottom: '24px', opacity: 0.9 }}>
               Zevrento is the platform where owners host their idle EVs, and you can rent them instantly starting at just <strong>₹99/hour</strong>. 
               <br/><br/>Zero hassle, unlimited kilometers, 100% tension-free!
             </p>
@@ -256,6 +258,7 @@ export default function CustomerHome() {
             <div
               key={vehicle.id}
               className={`vehicle-card animate-fade-in-up stagger-${Math.min(idx + 1, 5)}`}
+              style={vehicle.is_booked ? { opacity: 0.6, filter: 'grayscale(0.8)' } : {}}
             >
               {/* Image area */}
               <div className="vehicle-card-image">
@@ -327,7 +330,11 @@ export default function CustomerHome() {
 
                 {/* Meta + Book */}
                 <div className="vehicle-card-meta">
-                  {duration >= 1 && searched ? (
+                  {vehicle.is_booked ? (
+                    <div className="subtotal" style={{ color: 'var(--z-orange)', fontWeight: 600 }}>
+                      Available after {new Date(vehicle.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  ) : duration >= 1 && searched ? (
                     <div className="subtotal">
                       {duration}h → <strong>₹{vehicle.rate * duration}</strong> + ₹500 deposit
                     </div>
@@ -339,9 +346,9 @@ export default function CustomerHome() {
                   <button
                     className="z-btn z-btn-primary z-btn-sm"
                     onClick={() => handleBookNow(vehicle)}
-                    disabled={!searched}
+                    disabled={!searched || vehicle.is_booked}
                   >
-                    Book Now
+                    {vehicle.is_booked ? 'Booked' : 'Book Now'}
                   </button>
                 </div>
               </div>
