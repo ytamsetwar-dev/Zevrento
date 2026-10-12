@@ -9,7 +9,6 @@ import {
   HUBS, 
   PRICING, 
   HOURLY_TIERS, 
-  WEEKLY_SUBSCRIPTIONS, 
   getHoursDiff, 
   roundToNextHour, 
   addHours, 
@@ -35,8 +34,6 @@ export default function CustomerHome() {
   const { vehicles, availabilitySlots, user, refreshData } = useApp()
   const navigate = useNavigate()
 
-  // Navigation tab for rental type
-  const [bookingTab, setBookingTab] = useState('HOURLY') // 'HOURLY' | 'WEEKLY'
   const [selectedTierHours, setSelectedTierHours] = useState(2)
 
   // Search state
@@ -146,43 +143,6 @@ export default function CustomerHome() {
     })
   }
 
-  const handleBookSubscription = (sub) => {
-    if (user?.kyc_status !== 'VERIFIED' && !user?.kyc_verified) {
-      alert('Your KYC is not verified yet. Please go to your Profile and complete KYC verification to subscribe.')
-      navigate('/customer/profile')
-      return
-    }
-
-    const subFare = calculateFare(sub.hoursPerDay * 7, 'SUBSCRIPTION', sub.id)
-    const assignedVehicle = availableVehicles[0] || {
-      id: `sub_${sub.id}_${Date.now()}`,
-      model: 'Bounce Infinity E1',
-      plate: 'ALLOCATED AT HUB',
-      battery: 100,
-      color: '#10B981',
-      location: selectedHub?.name || 'Hyderabad Hub',
-    }
-
-    const subStart = roundToNextHour(new Date())
-    const subEnd = addHours(subStart, 24 * 7)
-
-    navigate('/customer/checkout', {
-      state: {
-        vehicle: assignedVehicle,
-        hub: selectedHub,
-        pickupTime: toInputDateTime(subStart),
-        dropoffTime: toInputDateTime(subEnd),
-        duration: sub.hoursPerDay * 7,
-        fare: subFare,
-        plan_type: 'SUBSCRIPTION',
-        plan_name: sub.name,
-        is_subscription: true,
-        duration_hours: sub.hoursPerDay * 7,
-        subscription_id: sub.id,
-      },
-    })
-  }
-
   return (
     <PageShell nav={<CustomerBottomNav />}>
       {/* ---- STARTUP POPUP ---- */}
@@ -258,75 +218,9 @@ export default function CustomerHome() {
         </div>
       )}
 
-      {/* ---- SEGMENTED CONTROL / TAB SWITCHER ---- */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <div
-          className="booking-segment-control"
-          style={{
-            display: 'flex',
-            background: '#F3F4F6',
-            borderRadius: '16px',
-            padding: '4px',
-            gap: '4px',
-            border: '1px solid var(--z-border)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setBookingTab('HOURLY')}
-            style={{
-              flex: 1,
-              padding: '12px 14px',
-              borderRadius: '12px',
-              border: 'none',
-              background: bookingTab === 'HOURLY' ? '#FFFFFF' : 'transparent',
-              color: bookingTab === 'HOURLY' ? 'var(--z-emerald-dark)' : '#6B7280',
-              fontWeight: 800,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              boxShadow: bookingTab === 'HOURLY' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <IconClock size={16} /> Hourly & Day Passes
-          </button>
-          <button
-            type="button"
-            onClick={() => setBookingTab('WEEKLY')}
-            style={{
-              flex: 1,
-              padding: '12px 14px',
-              borderRadius: '12px',
-              border: 'none',
-              background: bookingTab === 'WEEKLY' ? '#FFFFFF' : 'transparent',
-              color: bookingTab === 'WEEKLY' ? 'var(--z-emerald-dark)' : '#6B7280',
-              fontWeight: 800,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              boxShadow: bookingTab === 'WEEKLY' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <IconZap size={16} /> Weekly Subscriptions
-          </button>
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* SECTION A: ON-DEMAND HOURLY & DAY PASSES SEARCH CARD */}
-      {/* ========================================================= */}
-      {bookingTab === 'HOURLY' ? (
-        <>
-          <div className="search-card" style={{ marginTop: '12px' }}>
-            <div className="search-card-inner">
+      {/* ---- ON-DEMAND HOURLY SEARCH CARD ---- */}
+      <div className="search-card" style={{ marginTop: '16px' }}>
+        <div className="search-card-inner">
               {/* Location */}
               <div className="z-input-group search-location">
                 <label className="z-input-label">
@@ -703,185 +597,6 @@ export default function CustomerHome() {
               )}
             </div>
           </section>
-        </>
-      ) : (
-        /* ========================================================= */
-        /* SECTION B: WEEKLY SUBSCRIPTION PASSES (RECURRING) */
-        /* ========================================================= */
-        <section style={{ padding: '20px 16px 80px' }}>
-          <div className="z-container">
-            <div style={{ textAlign: 'center', marginBottom: '24px' }} className="animate-fade-in-up">
-              <span className="z-badge z-badge-emerald" style={{ marginBottom: '8px' }}>
-                <IconZap size={12} /> Recurring Weekly Commute & Shifts
-              </span>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#111827', marginBottom: '6px' }}>
-                Weekly Subscription Passes
-              </h2>
-              <p style={{ fontSize: '0.875rem', color: '#6B7280', maxWidth: '480px', margin: '0 auto' }}>
-                Lock in your dedicated EV with guaranteed battery swaps, zero security deposit, and predictable passive pricing.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {WEEKLY_SUBSCRIPTIONS.map((sub, idx) => (
-                <div
-                  key={sub.id}
-                  className={`z-card animate-fade-in-up stagger-${idx + 1}`}
-                  style={{
-                    borderRadius: '20px',
-                    border: '1px solid var(--z-border)',
-                    overflow: 'hidden',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
-                  }}
-                >
-                  {/* Card Header Strip */}
-                  <div
-                    style={{
-                      background: idx === 1 ? 'linear-gradient(135deg, #10B981, #059669)' : idx === 2 ? 'linear-gradient(135deg, #4F46E5, #3730A3)' : 'linear-gradient(135deg, #0EA5E9, #0284C7)',
-                      padding: '16px 20px',
-                      color: '#ffffff',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <span
-                        style={{
-                          background: 'rgba(255,255,255,0.2)',
-                          padding: '3px 8px',
-                          borderRadius: '999px',
-                          fontSize: '0.6875rem',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                        }}
-                      >
-                        {sub.code}
-                      </span>
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', marginTop: '4px' }}>
-                        {sub.shortName}
-                      </h3>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>₹{sub.price}</div>
-                      <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>/ 7-day week</div>
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="z-card-body" style={{ padding: '20px' }}>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                      <span
-                        style={{
-                          background: 'var(--z-emerald-ultra-light)',
-                          color: 'var(--z-emerald-dark)',
-                          padding: '6px 12px',
-                          borderRadius: '10px',
-                          fontSize: '0.8125rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        🕒 {sub.dailyHoursText}
-                      </span>
-                      <span
-                        style={{
-                          background: '#FEF3C7',
-                          color: '#92400E',
-                          padding: '6px 12px',
-                          borderRadius: '10px',
-                          fontSize: '0.8125rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ⚡ Effective ₹{sub.effectivePerDay} / day
-                      </span>
-                      <span
-                        style={{
-                          background: '#EEF2FF',
-                          color: '#4338CA',
-                          padding: '6px 12px',
-                          borderRadius: '10px',
-                          fontSize: '0.8125rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        🛡️ ₹0 Security Deposit
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: '0.875rem', color: '#4B5563', lineHeight: '1.5', marginBottom: '16px' }}>
-                      {sub.description}
-                    </p>
-
-                    <div
-                      style={{
-                        background: '#F9FAFB',
-                        borderRadius: '12px',
-                        padding: '12px 14px',
-                        marginBottom: '16px',
-                        fontSize: '0.8125rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#374151' }}>
-                        <IconCheck size={15} style={{ color: 'var(--z-emerald)' }} />
-                        <span>Unlimited Kilometers (Fair-Use policy)</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#374151' }}>
-                        <IconCheck size={15} style={{ color: 'var(--z-emerald)' }} />
-                        <span>Dedicated Hub or P2P handover at {selectedHub?.name || 'Hub'}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#374151' }}>
-                        <IconCheck size={15} style={{ color: 'var(--z-emerald)' }} />
-                        <span>Host Partner Share: ₹{sub.hostPayout} / Platform Cut: ₹{sub.platformCut}</span>
-                      </div>
-                    </div>
-
-                    {/* CTAs */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <a
-                        href={`https://wa.me/917020905724?text=${encodeURIComponent(
-                          `${sub.whatsappText}\nPickup Area: ${selectedHub?.name || 'Hyderabad'}\nName: ${user?.full_name || 'Customer'}\nPhone: ${user?.phone || ''}`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="z-btn z-btn-outline"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          color: '#16A34A',
-                          borderColor: '#86EFAC',
-                          background: '#F0FDF4',
-                          fontWeight: 700,
-                          padding: '12px',
-                          borderRadius: '12px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <IconWhatsApp size={18} />
-                        Subscribe via WhatsApp Verification
-                      </a>
-
-                      <button
-                        className="z-btn z-btn-primary z-btn-full"
-                        onClick={() => handleBookSubscription(sub)}
-                        style={{ fontWeight: 700, padding: '12px', borderRadius: '12px' }}
-                      >
-                        Book Pass Online (₹{sub.price} / wk)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
     </PageShell>
   )
 }

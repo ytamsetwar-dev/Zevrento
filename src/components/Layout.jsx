@@ -4,7 +4,7 @@
 // =============================================
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
-import { IconHome, IconList, IconUser, IconLogOut, IconScooter, IconShield, IconSettings } from './Icons.jsx'
+import { IconHome, IconList, IconUser, IconLogOut, IconScooter, IconShield, IconSettings, IconZap } from './Icons.jsx'
 
 // ---- HEADER ----
 export function Header({ title, showBack, onBack }) {
@@ -63,6 +63,7 @@ export function CustomerBottomNav() {
 
   const items = [
     { path: '/customer/home', icon: IconHome, label: 'Home' },
+    { path: '/customer/weekly', icon: IconZap, label: 'Weekly' },
     { path: '/customer/bookings', icon: IconList, label: 'Bookings' },
     { path: '/customer/profile', icon: IconUser, label: 'Profile' },
   ]

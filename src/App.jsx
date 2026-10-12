@@ -11,6 +11,7 @@ import { AppProvider, useApp } from './lib/store.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
 import CustomerHome from './pages/CustomerHome.jsx'
+import CustomerWeeklyPasses from './pages/CustomerWeeklyPasses.jsx'
 import CheckoutPage from './pages/CheckoutPage.jsx'
 import CustomerBookings from './pages/CustomerBookings.jsx'
 import CustomerProfile from './pages/CustomerProfile.jsx'
@@ -86,6 +87,9 @@ function AppRoutes() {
       {/* Customer Routes */}
       <Route path="/customer/home" element={
         <ProtectedRoute allowedRoles={['CUSTOMER']}><CustomerHome /></ProtectedRoute>
+      } />
+      <Route path="/customer/weekly" element={
+        <ProtectedRoute allowedRoles={['CUSTOMER']}><CustomerWeeklyPasses /></ProtectedRoute>
       } />
       <Route path="/customer/checkout" element={
         <ProtectedRoute allowedRoles={['CUSTOMER']}><CheckoutPage /></ProtectedRoute>
