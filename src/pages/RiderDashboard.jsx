@@ -1,53 +1,98 @@
-// =============================================
-// Zevrento — Rider/Host Dashboard
-// Stats overview + Active listed slots
-// =============================================
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
 import { PRICING, formatDateTime } from '../lib/data.js'
 import { PageShell, RiderBottomNav } from '../components/Layout.jsx'
-import { IconScooter, IconDollar, IconZap, IconPlus, IconClock } from '../components/Icons.jsx'
+import { IconScooter, IconDollar, IconZap, IconPlus, IconClock, IconBell, IconRefresh } from '../components/Icons.jsx'
+import { requestNotificationPermission, playChime } from '../lib/notifications.js'
 
 export default function RiderDashboard() {
-  const { availabilitySlots, bookings, user, deleteSlot, refreshData } = useApp()
+  const { availabilitySlots, bookings, user, deleteSlot, updateBookingStatus, refreshData } = useApp()
   const navigate = useNavigate()
+  const [alertsEnabled, setAlertsEnabled] = useState(() => {
+    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  })
+
+  // Filter listings belonging to this host (or all if demo)
+  const userSlots = useMemo(() => {
+    if (!user?.phone) return availabilitySlots
+    return availabilitySlots.filter(s => !s.host_phone || s.host_phone === user.phone)
+  }, [availabilitySlots, user?.phone])
 
   const stats = useMemo(() => {
-    const activeSlots = availabilitySlots.filter((s) => !s.is_booked).length
-    const totalSlots = availabilitySlots.length
+    const activeSlots = userSlots.filter((s) => !s.is_booked).length
+    const totalSlots = userSlots.length
     
     // Calculate total hours listed vs booked
-    const totalHours = availabilitySlots.reduce((sum, s) => {
+    const totalHours = userSlots.reduce((sum, s) => {
       const diff = (new Date(s.end_time) - new Date(s.start_time)) / (1000 * 60 * 60)
-      return sum + Math.ceil(diff)
+      return sum + Math.max(1, Math.ceil(diff) || 0)
     }, 0)
 
     // Only count payouts for BOOKED slots
-    const totalPayouts = availabilitySlots.filter(s => s.is_booked).reduce((sum, s) => {
+    const totalPayouts = userSlots.filter(s => s.is_booked).reduce((sum, s) => {
       const diff = (new Date(s.end_time) - new Date(s.start_time)) / (1000 * 60 * 60)
-      return sum + (Math.ceil(diff) * PRICING.hostPayout)
+      return sum + (Math.max(1, Math.ceil(diff) || 0) * PRICING.hostPayout)
     }, 0)
 
     return { activeSlots, totalSlots, totalPayouts, totalHours }
-  }, [availabilitySlots])
+  }, [userSlots])
 
-  const bookedSlots = availabilitySlots.filter(s => s.is_booked)
+  const bookedSlots = useMemo(() => {
+    return userSlots.filter(s => s.is_booked)
+  }, [userSlots])
+
+  const handleEnableAlerts = async () => {
+    const res = await requestNotificationPermission()
+    if (res === 'granted') {
+      setAlertsEnabled(true)
+      playChime('booking')
+      alert("✅ Notifications enabled! You will be alerted when a customer books your EV.")
+    } else {
+      alert("Please allow notification permissions in your browser settings.")
+    }
+  }
 
   return (
     <PageShell nav={<RiderBottomNav />}>
       <div style={{ padding: '20px 16px' }}>
         <div className="z-container">
-          {/* Welcome */}
-          <div className="animate-fade-in-up" style={{ marginBottom: '24px' }}>
-            <h2 style={{ marginBottom: '4px' }}>Welcome, {user?.name || 'Host'} 👋</h2>
-            <p className="text-sm text-muted">Manage your idle EV listings and track earnings</p>
+          {/* Welcome & Controls */}
+          <div className="animate-fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <h2 style={{ marginBottom: '4px' }}>Welcome, {user?.name || user?.full_name || 'Host'} 👋</h2>
+              <p className="text-sm text-muted">Manage your idle EV listings and track earnings</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleEnableAlerts}
+                style={{
+                  background: alertsEnabled ? '#DCFCE7' : '#F3F4F6',
+                  border: alertsEnabled ? '1px solid #86EFAC' : '1px solid #E5E7EB',
+                  color: alertsEnabled ? '#166534' : '#4B5563',
+                  padding: '6px 10px',
+                  borderRadius: '10px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <IconBell size={14} />
+                {alertsEnabled ? 'Alerts ON' : 'Enable Alerts'}
+              </button>
+            </div>
           </div>
 
           {/* Actionable Notifications */}
           {bookedSlots.length > 0 && bookedSlots.map(slot => {
-            // Find the active booking for this slot
-            const activeBooking = bookings.find(b => b.vehicle_id === slot.id && (b.status === 'CONFIRMED' || b.status === 'ACTIVE'))
+            // Find active booking for this slot
+            const activeBooking = bookings.find(b => 
+              (b.vehicle_id === slot.id || b.vehicle_id === slot.vehicle_id || (b.vehicle_model === slot.model && b.start_time === slot.start_time)) && 
+              (b.status === 'CONFIRMED' || b.status === 'ACTIVE')
+            )
             if (!activeBooking) return null;
 
             return (
@@ -161,11 +206,11 @@ export default function RiderDashboard() {
                 onClick={refreshData}
                 style={{ background: 'var(--z-surface)', border: '1px solid var(--z-border)', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                Refresh
+                <IconRefresh size={14} /> Refresh
               </button>
             </div>
 
-            {availabilitySlots.length === 0 ? (
+            {userSlots.length === 0 ? (
               <div className="z-card">
                 <div className="z-card-body" style={{ textAlign: 'center', padding: '40px 20px' }}>
                   <IconScooter size={36} style={{ opacity: 0.3, marginBottom: '12px' }} />
@@ -179,7 +224,7 @@ export default function RiderDashboard() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {availabilitySlots.map((slot) => {
+                {userSlots.map((slot) => {
                   const hours = Math.ceil((new Date(slot.end_time) - new Date(slot.start_time)) / (1000 * 60 * 60))
                   return (
                     <div key={slot.id} className="z-card">

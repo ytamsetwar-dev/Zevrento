@@ -98,33 +98,34 @@ export default function CheckoutPage() {
       setShowUtrModal(false)
       markSlotAsBooked(vehicle.id)
 
-      // Send Push Notifications via OneSignal REST API
+      // Send Push Notifications safely (via OneSignal if REST key configured)
       const adminPhone = "7020905724"
       const riderPhone = vehicle.host_phone || vehicle.host_id
-      
       const targetPhones = [adminPhone, `+91${adminPhone}`, riderPhone, `+91${riderPhone}`].filter(Boolean)
 
-      try {
-        await fetch("https://onesignal.com/api/v1/notifications", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Basic ${import.meta.env.VITE_ONESIGNAL_REST_KEY}`
-          },
-          body: JSON.stringify({
-            app_id: "8bacef9e-1033-4c51-a72c-ce13f5ddae5f",
-            include_aliases: {
-              external_id: targetPhones
+      const restKey = import.meta.env.VITE_ONESIGNAL_REST_KEY
+      if (restKey && restKey.trim() !== '') {
+        try {
+          await fetch("https://onesignal.com/api/v1/notifications", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Basic ${restKey}`
             },
-            target_channel: "push",
-            headings: { en: "Zevrento: New Booking!" },
-            contents: { en: `Vehicle ${vehicle.model} has been booked! Please check your dashboard for details.` }
+            body: JSON.stringify({
+              app_id: "8bacef9e-1033-4c51-a72c-ce13f5ddae5f",
+              include_aliases: {
+                external_id: targetPhones
+              },
+              target_channel: "push",
+              headings: { en: "Zevrento: New Booking!" },
+              contents: { en: `Vehicle ${vehicle.model} has been booked! Please check your dashboard for details.` }
+            })
           })
-        })
-      } catch (err) {
-        console.error("Push Notification Failed:", err)
+        } catch (err) {
+          console.warn("OneSignal REST Push Notice:", err)
+        }
       }
-
     }, 1500)
   }
 
@@ -226,6 +227,23 @@ export default function CheckoutPage() {
               <IconWhatsApp size={22} />
               Share Booking Details via WhatsApp
             </a>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }} className="animate-fade-in-up stagger-4">
+              <button
+                className="z-btn z-btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => navigate('/customer/bookings')}
+              >
+                View My Bookings
+              </button>
+              <button
+                className="z-btn z-btn-outline"
+                style={{ flex: 1 }}
+                onClick={() => navigate('/customer/home')}
+              >
+                Back to Home
+              </button>
+            </div>
           </div>
         </div>
       </PageShell>

@@ -1,34 +1,53 @@
 // =============================================
 // Zevrento — Global State Store (Context)
 // Handles auth, bookings, and app-wide state
+// Bulletproof multi-tier persistence (LocalStorage + Supabase)
 // =============================================
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase.js'
 import { VEHICLES, BOOKING_STATUS, generateBookingCode, generateOTP } from './data.js'
+import { sendNotification } from './notifications.js'
 
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   // Auth state
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('z_user')
-    return saved ? JSON.parse(saved) : null
+    try {
+      const saved = localStorage.getItem('z_user')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
   })
   const [isAuthenticated, setIsAuthenticated] = useState(!!user)
 
   // Booking state
   const [bookings, setBookings] = useState(() => {
-    const saved = localStorage.getItem('z_bookings')
-    return saved ? JSON.parse(saved) : []
-  })
-  const [availabilitySlots, setAvailabilitySlots] = useState(() => {
-    const saved = localStorage.getItem('z_slots')
-    return saved ? JSON.parse(saved) : []
+    try {
+      const saved = localStorage.getItem('z_bookings')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
   })
 
-  // Fetch from Supabase on load
+  // Availability slots (Rider-listed EVs)
+  const [availabilitySlots, setAvailabilitySlots] = useState(() => {
+    try {
+      const saved = localStorage.getItem('z_slots')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  // To prevent firing notifications on initial load
+  const isInitialLoad = useRef(true)
+
+  // Sync latest data from Supabase
   const refreshData = useCallback(async () => {
-    // Sync latest profile data
+    // 1. Sync latest profile data
     const savedStr = localStorage.getItem('z_user')
     if (savedStr) {
       try {
@@ -45,30 +64,60 @@ export function AppProvider({ children }) {
           }
         }
       } catch (e) {
-        console.error('Error syncing profile:', e)
+        console.warn('Notice syncing profile:', e)
       }
     }
 
-    const { data: bData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false })
-    if (bData) setBookings(bData)
-    
-    const { data: sData } = await supabase.from('availability_slots').select('*').order('created_at', { ascending: false })
-    if (sData) setAvailabilitySlots(sData)
+    // 2. Sync Bookings (Safe merge: never wipe local bookings if Supabase returns empty)
+    try {
+      const { data: bData, error: bErr } = await supabase.from('bookings').select('*').order('created_at', { ascending: false })
+      if (!bErr && Array.isArray(bData)) {
+        setBookings(prev => {
+          const map = new Map()
+          // Retain local bookings
+          prev.forEach(b => { if (b?.id) map.set(b.id, b) })
+          // Merge Supabase bookings (authoritative for cloud status)
+          bData.forEach(b => { if (b?.id) map.set(b.id, b) })
+          return Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        })
+      }
+    } catch (e) {
+      console.warn('Notice syncing bookings:', e)
+    }
+
+    // 3. Sync Availability Slots (Safe merge: retain all active listings)
+    try {
+      const { data: sData, error: sErr } = await supabase.from('availability_slots').select('*').order('created_at', { ascending: false })
+      if (!sErr && Array.isArray(sData)) {
+        setAvailabilitySlots(prev => {
+          const map = new Map()
+          prev.forEach(s => { if (s?.id) map.set(s.id, s) })
+          sData.forEach(s => { if (s?.id) map.set(s.id, s) })
+          return Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        })
+      }
+    } catch (e) {
+      console.warn('Notice syncing slots:', e)
+    }
   }, [])
 
   useEffect(() => {
-    refreshData()
-    
-    // Auto-refresh data periodically to simulate realtime updates
-    // Using 3 seconds (3000ms) to ensure we don't crash your Supabase free tier rate limits
+    refreshData().finally(() => {
+      // Mark initial load complete after 1.5s
+      setTimeout(() => {
+        isInitialLoad.current = false
+      }, 1500)
+    })
+
+    // Periodic sync every 4 seconds
     const intervalId = setInterval(() => {
       refreshData()
-    }, 3000)
-    
+    }, 4000)
+
     return () => clearInterval(intervalId)
   }, [refreshData])
 
-  // Persist to localStorage
+  // Persist user to localStorage
   useEffect(() => {
     if (user) {
       localStorage.setItem('z_user', JSON.stringify(user))
@@ -77,10 +126,12 @@ export function AppProvider({ children }) {
     }
   }, [user])
 
+  // Persist bookings to localStorage
   useEffect(() => {
     localStorage.setItem('z_bookings', JSON.stringify(bookings))
   }, [bookings])
 
+  // Persist availability slots to localStorage
   useEffect(() => {
     localStorage.setItem('z_slots', JSON.stringify(availabilitySlots))
   }, [availabilitySlots])
@@ -89,17 +140,21 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === 'z_bookings') {
-        setBookings(e.newValue ? JSON.parse(e.newValue) : [])
+        try {
+          setBookings(e.newValue ? JSON.parse(e.newValue) : [])
+        } catch { /* ignore */ }
       }
       if (e.key === 'z_slots') {
-        setAvailabilitySlots(e.newValue ? JSON.parse(e.newValue) : [])
+        try {
+          setAvailabilitySlots(e.newValue ? JSON.parse(e.newValue) : [])
+        } catch { /* ignore */ }
       }
     }
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
   }, [])
 
-  // Fleet state (mutable copy)
+  // Fleet state (mutable copy for custom overrides)
   const [vehicles, setVehicles] = useState(VEHICLES)
 
   // ---- AUTH ----
@@ -114,7 +169,6 @@ export function AppProvider({ children }) {
   }, [])
 
   const submitKyc = useCallback(async () => {
-    // Customer submits KYC (moves to PENDING)
     setUser((prev) => prev ? { ...prev, kyc_status: 'PENDING' } : null)
     if (user?.phone) {
       await supabase.from('profiles').update({ kyc_status: 'PENDING' }).eq('phone', user.phone)
@@ -129,39 +183,53 @@ export function AppProvider({ children }) {
   }, [user])
 
   const verifyUserKyc = useCallback(async (phoneToVerify) => {
-    // Admin approves KYC
     if (user?.phone === phoneToVerify) {
       setUser((prev) => prev ? { ...prev, kyc_verified: true, kyc_status: 'VERIFIED' } : null)
     }
-    await supabase.from('profiles').update({ kyc_status: 'VERIFIED' }).eq('phone', phoneToVerify)
+    await supabase.from('profiles').update({ kyc_status: 'VERIFIED', kyc_verified: true }).eq('phone', phoneToVerify)
   }, [user])
 
   // ---- BOOKINGS ----
   const createBooking = useCallback((bookingData) => {
-    // We use a valid UUID here because Supabase bookings table uses uuid for the id column.
     const bookingId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
       ? crypto.randomUUID() 
       : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
           var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
           return v.toString(16);
-        });
+        })
 
     const booking = {
       id: bookingId,
       booking_code: generateBookingCode(),
-      status: BOOKING_STATUS.PENDING_KYC,
-      pickup_otp: null,
+      status: BOOKING_STATUS.CONFIRMED,
+      pickup_otp: generateOTP(),
       created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 min lock
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       ...bookingData,
     }
-    setBookings((prev) => [booking, ...prev])
-    
-    // Background sync to Supabase
-    supabase.from('bookings').insert([booking]).then(({error}) => {
-      if (error) console.error('Supabase insert booking error:', error)
+
+    // 1. Immediately store in state and localStorage
+    setBookings((prev) => [booking, ...prev.filter(b => b.id !== bookingId)])
+    try {
+      const current = JSON.parse(localStorage.getItem('z_bookings') || '[]')
+      localStorage.setItem('z_bookings', JSON.stringify([booking, ...current.filter(b => b.id !== bookingId)]))
+    } catch { /* ignore */ }
+
+    // 2. Real-time Audio and Desktop Notification
+    sendNotification(`🎉 New Booking: ${booking.booking_code}`, {
+      body: `Vehicle: ${booking.vehicle_model || 'EV'} | Amount: ₹${booking.total_amount}`,
+      type: 'booking'
     })
-    
+
+    // 3. Sync to Supabase
+    supabase.from('bookings').insert([booking]).then(({ error }) => {
+      if (error) {
+        console.warn('Notice syncing booking to Supabase (preserved in local storage):', error.message)
+      } else {
+        console.log('✅ Booking synced successfully to Supabase!')
+      }
+    })
+
     return booking
   }, [])
 
@@ -171,24 +239,43 @@ export function AppProvider({ children }) {
         b.id === bookingId ? { ...b, status, ...extra } : b
       )
     )
-    
-    // Background sync to Supabase
-    supabase.from('bookings').update({ status, ...extra }).eq('id', bookingId).then(({error}) => {
-      if (error) console.error('Supabase update booking error:', error)
+
+    supabase.from('bookings').update({ status, ...extra }).eq('id', bookingId).then(({ error }) => {
+      if (error) console.warn('Notice updating booking in Supabase:', error.message)
     })
   }, [])
 
   const approveBooking = useCallback((bookingId) => {
     const otp = generateOTP()
     updateBookingStatus(bookingId, BOOKING_STATUS.CONFIRMED, { pickup_otp: otp })
+    sendNotification(`OTP Issued: ${otp}`, {
+      body: `Booking approved and OTP generated for pickup`,
+      type: 'info'
+    })
     return otp
   }, [updateBookingStatus])
 
   const completeBooking = useCallback((bookingId) => {
     updateBookingStatus(bookingId, BOOKING_STATUS.COMPLETED)
+    sendNotification('Trip Completed', {
+      body: `Booking completed. Deposit refunded and host credited.`,
+      type: 'info'
+    })
   }, [updateBookingStatus])
 
-  // ---- AVAILABILITY SLOTS (Rider Host) ----
+  const deleteBooking = useCallback((bookingId) => {
+    setBookings((prev) => prev.filter(b => b.id !== bookingId))
+    try {
+      const current = JSON.parse(localStorage.getItem('z_bookings') || '[]')
+      localStorage.setItem('z_bookings', JSON.stringify(current.filter(b => b.id !== bookingId)))
+    } catch { /* ignore */ }
+
+    supabase.from('bookings').delete().eq('id', bookingId).then(({ error }) => {
+      if (error) console.warn('Notice deleting booking in Supabase:', error.message)
+    })
+  }, [])
+
+  // ---- AVAILABILITY SLOTS (Rider Host Listed Vehicles) ----
   const publishSlot = useCallback((slotData) => {
     const slot = {
       id: `s_${Date.now()}`,
@@ -196,22 +283,41 @@ export function AppProvider({ children }) {
       created_at: new Date().toISOString(),
       ...slotData,
     }
-    setAvailabilitySlots((prev) => [slot, ...prev])
-    
-    // Background sync to Supabase
-    supabase.from('availability_slots').insert([slot]).then(({error}) => {
-      if (error) console.error('Supabase insert slot error:', error)
+
+    // 1. Immediately store in state and localStorage
+    setAvailabilitySlots((prev) => [slot, ...prev.filter(s => s.id !== slot.id)])
+    try {
+      const current = JSON.parse(localStorage.getItem('z_slots') || '[]')
+      localStorage.setItem('z_slots', JSON.stringify([slot, ...current.filter(s => s.id !== slot.id)]))
+    } catch { /* ignore */ }
+
+    // 2. Real-time Audio and Desktop Notification
+    sendNotification(`⚡ New Vehicle Listed: ${slot.model}`, {
+      body: `Plate: ${slot.plate} | Location: ${slot.pickup_location || 'Hub'}`,
+      type: 'vehicle'
     })
-    
+
+    // 3. Sync to Supabase
+    supabase.from('availability_slots').insert([slot]).then(({ error }) => {
+      if (error) {
+        console.warn('Notice syncing slot to Supabase (preserved in local storage):', error.message)
+      } else {
+        console.log('✅ Vehicle slot synced successfully to Supabase!')
+      }
+    })
+
     return slot
   }, [])
 
   const deleteSlot = useCallback((slotId) => {
     setAvailabilitySlots((prev) => prev.filter(s => s.id !== slotId))
-    
-    // Background sync to Supabase
-    supabase.from('availability_slots').delete().eq('id', slotId).then(({error}) => {
-      if (error) console.error('Supabase delete slot error:', error)
+    try {
+      const current = JSON.parse(localStorage.getItem('z_slots') || '[]')
+      localStorage.setItem('z_slots', JSON.stringify(current.filter(s => s.id !== slotId)))
+    } catch { /* ignore */ }
+
+    supabase.from('availability_slots').delete().eq('id', slotId).then(({ error }) => {
+      if (error) console.warn('Notice deleting slot in Supabase:', error.message)
     })
   }, [])
 
@@ -219,9 +325,9 @@ export function AppProvider({ children }) {
     setAvailabilitySlots((prev) =>
       prev.map((s) => (s.id === slotId ? { ...s, is_booked: true } : s))
     )
-    
-    supabase.from('availability_slots').update({ is_booked: true }).eq('id', slotId).then(({error}) => {
-      if (error) console.error('Supabase update slot error:', error)
+
+    supabase.from('availability_slots').update({ is_booked: true }).eq('id', slotId).then(({ error }) => {
+      if (error) console.warn('Notice updating slot in Supabase:', error.message)
     })
   }, [])
 
@@ -244,6 +350,7 @@ export function AppProvider({ children }) {
     updateBookingStatus,
     approveBooking,
     completeBooking,
+    deleteBooking,
     publishSlot,
     deleteSlot,
     markSlotAsBooked,

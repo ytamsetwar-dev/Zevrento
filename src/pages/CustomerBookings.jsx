@@ -25,15 +25,26 @@ const STATUS_LABELS = {
 }
 
 export default function CustomerBookings() {
-  const { bookings } = useApp()
+  const { bookings, user, refreshData } = useApp()
 
-  const customerBookings = bookings.filter(() => true) // In production, filter by user
+  const customerBookings = bookings.filter((b) => {
+    if (!user?.phone) return true
+    return b.customer_phone === user.phone || !b.customer_phone
+  })
 
   return (
     <PageShell nav={<CustomerBottomNav />}>
       <div style={{ padding: '20px 16px' }}>
         <div className="z-container">
-          <h2 style={{ marginBottom: '20px' }}>My Bookings</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0 }}>My Bookings ({customerBookings.length})</h2>
+            <button
+              onClick={refreshData}
+              style={{ background: 'var(--z-surface)', border: '1px solid var(--z-border)', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Refresh
+            </button>
+          </div>
 
           {customerBookings.length === 0 ? (
             <div style={{
