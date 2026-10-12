@@ -8,7 +8,6 @@ import { useApp } from '../lib/store.jsx'
 import { 
   HUBS, 
   PRICING, 
-  HOURLY_TIERS, 
   getHoursDiff, 
   roundToNextHour, 
   addHours, 
@@ -33,8 +32,6 @@ import {
 export default function CustomerHome() {
   const { vehicles, availabilitySlots, user, refreshData } = useApp()
   const navigate = useNavigate()
-
-  const [selectedTierHours, setSelectedTierHours] = useState(2)
 
   // Search state
   const defaultPickup = roundToNextHour(new Date())
@@ -105,15 +102,6 @@ export default function CustomerHome() {
 
     return hosts
   }, [availabilitySlots, sortBy, selectedHub, hub, pickupTime, dropoffTime, searched])
-
-  // Select standard tiered chip
-  const handleSelectTier = (tierHours) => {
-    setSelectedTierHours(tierHours)
-    const pDate = new Date(pickupTime)
-    const newDropoff = addHours(pDate, tierHours)
-    setDropoffTime(toInputDateTime(newDropoff))
-    setSearched(true)
-  }
 
   const handleSearch = () => {
     if (duration < 1) return
@@ -254,68 +242,6 @@ export default function CustomerHome() {
                 </div>
               </div>
 
-              {/* DURATION CHIP SELECTOR (Royal Brothers Clean Layout) */}
-              <div style={{ marginBottom: '14px' }}>
-                <label className="z-input-label" style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Choose Rental Pass</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--z-emerald)', fontWeight: 700 }}>Tiered Super-Saver</span>
-                </label>
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', paddingTop: '6px' }}>
-                  {HOURLY_TIERS.map((tier) => {
-                    const isSelected = selectedTierHours === tier.hours || duration === tier.hours
-                    return (
-                      <div
-                        key={tier.id}
-                        onClick={() => handleSelectTier(tier.hours)}
-                        style={{
-                          flex: '0 0 auto',
-                          minWidth: '108px',
-                          padding: '10px 10px',
-                          borderRadius: '14px',
-                          border: isSelected ? '2px solid var(--z-emerald)' : '1px solid var(--z-border)',
-                          background: isSelected ? 'var(--z-emerald-ultra-light)' : '#FFFFFF',
-                          cursor: 'pointer',
-                          textAlign: 'center',
-                          position: 'relative',
-                          transition: 'all 0.15s ease',
-                          boxShadow: isSelected ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none',
-                        }}
-                      >
-                        {tier.badge && (
-                          <span
-                            style={{
-                              position: 'absolute',
-                              top: '-8px',
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              background: tier.hours === 6 ? 'var(--z-emerald)' : tier.hours === 12 ? '#3B82F6' : '#F59E0B',
-                              color: '#ffffff',
-                              fontSize: '0.59rem',
-                              fontWeight: 800,
-                              padding: '2px 6px',
-                              borderRadius: '999px',
-                              whiteSpace: 'nowrap',
-                              boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
-                            }}
-                          >
-                            {tier.badge}
-                          </span>
-                        )}
-                        <div style={{ fontWeight: 800, fontSize: '0.9375rem', color: isSelected ? 'var(--z-emerald-dark)' : '#111827' }}>
-                          {tier.label}
-                        </div>
-                        <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: isSelected ? 'var(--z-emerald)' : '#4B5563', marginTop: '2px' }}>
-                          ₹{tier.price}
-                        </div>
-                        <div style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '2px' }}>
-                          {tier.name}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
               {/* Pickup & Dropoff time */}
               <div className="search-row">
                 <div className="z-input-group">
@@ -327,10 +253,7 @@ export default function CustomerHome() {
                     className="z-input"
                     type="datetime-local"
                     value={pickupTime}
-                    onChange={(e) => {
-                      setPickupTime(e.target.value)
-                      setSelectedTierHours(null)
-                    }}
+                    onChange={(e) => setPickupTime(e.target.value)}
                     style={{ fontSize: '0.8125rem' }}
                   />
                 </div>
@@ -343,10 +266,7 @@ export default function CustomerHome() {
                     className="z-input"
                     type="datetime-local"
                     value={dropoffTime}
-                    onChange={(e) => {
-                      setDropoffTime(e.target.value)
-                      setSelectedTierHours(null)
-                    }}
+                    onChange={(e) => setDropoffTime(e.target.value)}
                     min={pickupTime}
                     style={{ fontSize: '0.8125rem' }}
                   />

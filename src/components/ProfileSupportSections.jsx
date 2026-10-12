@@ -4,18 +4,12 @@
 // Notification Preferences, and KYC Verification.
 // Tailored for Customer and Host roles.
 // =============================================
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { 
-  IconShield, 
   IconPhone, 
   IconWhatsApp, 
-  IconClock, 
-  IconCheck, 
   IconBell, 
-  IconChevronDown, 
-  IconAlertTriangle,
-  IconZap,
-  IconDollar
+  IconChevronDown 
 } from './Icons.jsx'
 
 // ---- NOTIFICATION PREFERENCES CARD ----
