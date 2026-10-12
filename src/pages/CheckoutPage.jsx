@@ -52,14 +52,25 @@ export default function CheckoutPage() {
 
   if (!state) return null
 
-  const { vehicle, hub, pickupTime, dropoffTime, duration, fare } = state
+  const { 
+    vehicle, 
+    hub, 
+    pickupTime, 
+    dropoffTime, 
+    duration, 
+    fare, 
+    plan_type, 
+    plan_name, 
+    is_subscription, 
+    duration_hours 
+  } = state
 
   const handleInitiatePayment = (mode) => {
     setPaymentMode(mode)
     setShowUtrModal(true)
 
     // Trigger UPI deep link
-    const amount = mode === 'DEPOSIT' ? 500 : fare.total
+    const amount = mode === 'DEPOSIT' ? (fare.deposit || 500) : fare.total
     const upiId = 'ytamsetwar-2@okaxis' // Change this to your actual UPI ID
     const trId = `ZEV${Date.now()}`
     const upiLink = `upi://pay?pa=${upiId}&pn=Yash%20Tamsetwar&tr=${trId}&tn=Zevrento%20Booking&am=${amount}&cu=INR`
@@ -82,12 +93,16 @@ export default function CheckoutPage() {
       start_time: pickupTime,
       end_time: dropoffTime,
       total_amount: fare.total,
-      deposit: fare.deposit,
-      platform_fee: fare.platformFeeTotal,
-      host_payout: fare.hostPayoutTotal,
+      deposit: fare.deposit ?? 500,
+      platform_fee: fare.platformFeeTotal || 0,
+      host_payout: fare.hostPayoutTotal || 0,
       utr_number: utrInput.trim(),
       payment_mode: paymentMode === 'DEPOSIT' ? 'DEPOSIT_ONLY' : 'FULL_PAYMENT',
-      duration,
+      duration: duration_hours || duration,
+      duration_hours: duration_hours || duration,
+      plan_type: plan_type || (fare.isSubscription ? 'SUBSCRIPTION' : 'HOURLY'),
+      plan_name: plan_name || fare.planName || `${duration}h Pass`,
+      is_subscription: Boolean(is_subscription ?? fare.isSubscription),
       status: 'CONFIRMED'
     })
 
@@ -306,31 +321,42 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Fare Breakdown */}
+          {/* Transparent Fare Breakdown */}
           <div className="checkout-section animate-fade-in-up stagger-1">
-            <div className="checkout-section-title">Fare Breakdown</div>
+            <div className="checkout-section-title">Transparent Fare Breakdown</div>
             <div className="z-card">
               <div className="z-card-body">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--z-text-primary)' }}>
+                    {plan_name || fare.planName || (is_subscription ? 'Weekly Subscription Pass' : `${duration}-Hour Rental Pass`)}
+                  </span>
+                  <span className="z-badge z-badge-emerald" style={{ fontSize: '0.75rem' }}>
+                    {is_subscription ? 'Weekly Subscription' : `${duration} Hours Pass`}
+                  </span>
+                </div>
+
                 <div className="fare-row">
-                  <span className="label">Base Rental Fee ({duration}h × ₹{PRICING.baseRate}/hr)</span>
+                  <span className="label">Base Rental Pass</span>
                   <span className="value">₹{fare.rental}</span>
                 </div>
                 <div className="fare-note">
-                  Platform & Maintenance Fee: ₹{PRICING.platformFee}/hr — Included in base rate
+                  Platform & Maintenance Fee: ₹{fare.platformFeeTotal} — Included in pass
                 </div>
 
                 <div className="z-divider-dashed" style={{ margin: '8px 0' }} />
 
                 <div className="fare-row">
-                  <span className="label">Refundable Security Deposit</span>
-                  <span className="value">₹{fare.deposit}</span>
+                  <span className="label">100% Refundable Security Deposit</span>
+                  <span className="value">{fare.deposit > 0 ? `₹${fare.deposit}` : '₹0 (Waived)'}</span>
                 </div>
                 <div className="fare-note">
-                  100% refundable instantly via UPI upon vehicle return
+                  {fare.deposit > 0
+                    ? '100% refundable instantly via UPI upon vehicle return'
+                    : 'Waived per cycle for weekly subscription passes'}
                 </div>
 
                 <div className="fare-row total">
-                  <span className="label" style={{ fontWeight: 700 }}>Total Amount Payable</span>
+                  <span className="label" style={{ fontWeight: 700 }}>Total Payable</span>
                   <span className="value">₹{fare.total}</span>
                 </div>
               </div>
@@ -383,19 +409,21 @@ export default function CheckoutPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button
-                  className="z-btn z-btn-outline z-btn-full z-btn-lg"
-                  onClick={() => handleInitiatePayment('DEPOSIT')}
-                  disabled={timerSeconds === 0 || !tncAccepted}
-                  style={{ display: 'flex', flexDirection: 'column', padding: '12px', height: 'auto', gap: '4px', background: '#F8FAFC' }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
-                    <IconShield size={18} /> Pay ₹500 Deposit & Book
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)', fontWeight: 500 }}>
-                    Pay the deposit now to reserve. Pay remaining ₹{fare.total - 500} at pickup.
-                  </span>
-                </button>
+                {fare.deposit > 0 && (
+                  <button
+                    className="z-btn z-btn-outline z-btn-full z-btn-lg"
+                    onClick={() => handleInitiatePayment('DEPOSIT')}
+                    disabled={timerSeconds === 0 || !tncAccepted}
+                    style={{ display: 'flex', flexDirection: 'column', padding: '12px', height: 'auto', gap: '4px', background: '#F8FAFC' }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                      <IconShield size={18} /> Pay ₹{fare.deposit} Deposit & Book
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)', fontWeight: 500 }}>
+                      Pay the deposit now to reserve. Pay remaining ₹{fare.total - fare.deposit} at pickup.
+                    </span>
+                  </button>
+                )}
 
                 <button
                   className="z-btn z-btn-primary z-btn-full z-btn-lg"

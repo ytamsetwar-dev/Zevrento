@@ -50,6 +50,12 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS return_requested boolean DE
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS completed_at timestamp with time zone;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS admin_video_verified boolean DEFAULT false;
 
+-- Multi-Tier Rental & Subscription Engine Columns
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS plan_type text DEFAULT 'HOURLY';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS plan_name text;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS is_subscription boolean DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS duration_hours numeric;
+
 -- Remove blocking NOT NULL constraints if existing
 DO $$
 BEGIN
@@ -85,6 +91,9 @@ ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS start_time text;
 ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS end_time text;
 ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS hub_id text;
 ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS pickup_location text;
+ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS listing_type text DEFAULT 'SINGLE_SLOT'; -- 'SINGLE_SLOT' or 'WEEKLY_COMMITMENT'
+ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS commitment_days numeric DEFAULT 1;
+ALTER TABLE public.availability_slots ADD COLUMN IF NOT EXISTS daily_hours text;
 
 -- 5. FIX PROFILES TABLE SCHEMA
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS kyc_status text DEFAULT 'PENDING';

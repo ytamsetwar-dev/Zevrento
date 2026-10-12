@@ -5,13 +5,39 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
-import { HUBS, PRICING, getHoursDiff, roundToNextHour, addHours, toInputDateTime, calculateFare } from '../lib/data.js'
+import { 
+  HUBS, 
+  PRICING, 
+  HOURLY_TIERS, 
+  WEEKLY_SUBSCRIPTIONS, 
+  getHoursDiff, 
+  roundToNextHour, 
+  addHours, 
+  toInputDateTime, 
+  calculateFare 
+} from '../lib/data.js'
 import { PageShell, CustomerBottomNav } from '../components/Layout.jsx'
-import { IconMapPin, IconClock, IconCalendar, IconSearch, IconZap, IconBattery, IconChevronDown, IconRefresh } from '../components/Icons.jsx'
+import { 
+  IconMapPin, 
+  IconClock, 
+  IconCalendar, 
+  IconSearch, 
+  IconZap, 
+  IconBattery, 
+  IconChevronDown, 
+  IconRefresh,
+  IconWhatsApp,
+  IconShield,
+  IconCheck
+} from '../components/Icons.jsx'
 
 export default function CustomerHome() {
   const { vehicles, availabilitySlots, user, refreshData } = useApp()
   const navigate = useNavigate()
+
+  // Navigation tab for rental type
+  const [bookingTab, setBookingTab] = useState('HOURLY') // 'HOURLY' | 'WEEKLY'
+  const [selectedTierHours, setSelectedTierHours] = useState(2)
 
   // Search state
   const defaultPickup = roundToNextHour(new Date())
@@ -27,8 +53,11 @@ export default function CustomerHome() {
   const duration = useMemo(() => getHoursDiff(pickupTime, dropoffTime), [pickupTime, dropoffTime])
   const selectedHub = HUBS.find((h) => h.id === hub)
 
+  // Active fare breakdown for selected hourly duration
+  const fareBreakdown = useMemo(() => calculateFare(duration, 'HOURLY'), [duration])
+
   const availableVehicles = useMemo(() => {
-    const now = new Date();
+    const now = new Date()
     let hosts = availabilitySlots
       .filter((s) => new Date(s.end_time) > now)
       .map((s) => {
@@ -48,36 +77,46 @@ export default function CustomerHome() {
           end_time: s.end_time,
           hub_id: s.hub_id,
           pickup_location: s.pickup_location,
-          is_booked: s.is_booked
+          is_booked: s.is_booked,
+          host_phone: s.host_phone,
         }
       })
 
     // Filter by location
-    hosts = hosts.filter(h => {
-      if (h.hub_id) return h.hub_id === hub;
-      if (h.pickup_location) return h.pickup_location.includes(selectedHub?.name);
-      return true; // Fallback
+    hosts = hosts.filter((h) => {
+      if (h.hub_id) return h.hub_id === hub
+      if (h.pickup_location) return h.pickup_location.includes(selectedHub?.name)
+      return true
     })
 
     // Filter by requested duration and time slot if a search was made
     if (searched) {
       const pTime = new Date(pickupTime)
       const dTime = new Date(dropoffTime)
-      hosts = hosts.filter(h => {
+      hosts = hosts.filter((h) => {
         const hStart = new Date(h.start_time)
         const hEnd = new Date(h.end_time)
         return pTime >= hStart && dTime <= hEnd
       })
     }
-      
+
     if (sortBy === 'battery') {
       hosts = hosts.sort((a, b) => b.battery - a.battery)
     } else if (sortBy === 'duration') {
       hosts = hosts.sort((a, b) => b.durationAvailable - a.durationAvailable)
     }
-    
+
     return hosts
   }, [availabilitySlots, sortBy, selectedHub, hub, pickupTime, dropoffTime, searched])
+
+  // Select standard tiered chip
+  const handleSelectTier = (tierHours) => {
+    setSelectedTierHours(tierHours)
+    const pDate = new Date(pickupTime)
+    const newDropoff = addHours(pDate, tierHours)
+    setDropoffTime(toInputDateTime(newDropoff))
+    setSearched(true)
+  }
 
   const handleSearch = () => {
     if (duration < 1) return
@@ -86,7 +125,7 @@ export default function CustomerHome() {
 
   const handleBookNow = (vehicle) => {
     if (user?.kyc_status !== 'VERIFIED' && !user?.kyc_verified) {
-      alert("Your KYC is not verified yet. Please go to your Profile and complete KYC verification to book a vehicle.")
+      alert('Your KYC is not verified yet. Please go to your Profile and complete KYC verification to book a vehicle.')
       navigate('/customer/profile')
       return
     }
@@ -98,7 +137,48 @@ export default function CustomerHome() {
         pickupTime,
         dropoffTime,
         duration,
-        fare: calculateFare(duration),
+        fare: fareBreakdown,
+        plan_type: 'HOURLY',
+        plan_name: fareBreakdown.planName,
+        is_subscription: false,
+        duration_hours: duration,
+      },
+    })
+  }
+
+  const handleBookSubscription = (sub) => {
+    if (user?.kyc_status !== 'VERIFIED' && !user?.kyc_verified) {
+      alert('Your KYC is not verified yet. Please go to your Profile and complete KYC verification to subscribe.')
+      navigate('/customer/profile')
+      return
+    }
+
+    const subFare = calculateFare(sub.hoursPerDay * 7, 'SUBSCRIPTION', sub.id)
+    const assignedVehicle = availableVehicles[0] || {
+      id: `sub_${sub.id}_${Date.now()}`,
+      model: 'Bounce Infinity E1',
+      plate: 'ALLOCATED AT HUB',
+      battery: 100,
+      color: '#10B981',
+      location: selectedHub?.name || 'Hyderabad Hub',
+    }
+
+    const subStart = roundToNextHour(new Date())
+    const subEnd = addHours(subStart, 24 * 7)
+
+    navigate('/customer/checkout', {
+      state: {
+        vehicle: assignedVehicle,
+        hub: selectedHub,
+        pickupTime: toInputDateTime(subStart),
+        dropoffTime: toInputDateTime(subEnd),
+        duration: sub.hoursPerDay * 7,
+        fare: subFare,
+        plan_type: 'SUBSCRIPTION',
+        plan_name: sub.name,
+        is_subscription: true,
+        duration_hours: sub.hoursPerDay * 7,
+        subscription_id: sub.id,
       },
     })
   }
@@ -107,267 +187,701 @@ export default function CustomerHome() {
     <PageShell nav={<CustomerBottomNav />}>
       {/* ---- STARTUP POPUP ---- */}
       {showPopup && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.8)', zIndex: 999999, // Super high z-index
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
-          backdropFilter: 'blur(5px)'
-        }}>
-          <div className="animate-fade-in-up" style={{
-            background: '#ffffff', borderRadius: '24px', padding: '32px 24px',
-            textAlign: 'center', maxWidth: '380px', width: '100%',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            border: '1px solid var(--z-border)'
-          }}>
-            <div style={{ background: 'var(--z-emerald-ultra-light)', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-               <IconZap size={32} style={{ color: 'var(--z-emerald)' }} />
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            backdropFilter: 'blur(5px)',
+          }}
+        >
+          <div
+            className="animate-fade-in-up"
+            style={{
+              background: '#ffffff',
+              borderRadius: '24px',
+              padding: '32px 24px',
+              textAlign: 'center',
+              maxWidth: '380px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              border: '1px solid var(--z-border)',
+            }}
+          >
+            <div
+              style={{
+                background: 'var(--z-emerald-ultra-light)',
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px',
+              }}
+            >
+              <IconZap size={32} style={{ color: 'var(--z-emerald)' }} />
             </div>
-            <h2 style={{ marginBottom: '12px', fontSize: '1.5rem', fontWeight: 800, color: '#111827' }}>Welcome to Zevrento!</h2>
-            <p style={{ color: '#4B5563', fontSize: '0.9375rem', lineHeight: '1.6', marginBottom: '24px', opacity: 0.9 }}>
-              Zevrento is the platform where owners host their idle EVs, and you can rent them instantly starting at just <strong>₹99/hour</strong>. 
-              <br/><br/>Zero hassle, unlimited kilometers, 100% tension-free!
+            <h2 style={{ marginBottom: '12px', fontSize: '1.5rem', fontWeight: 800, color: '#111827' }}>
+              Welcome to Zevrento!
+            </h2>
+            <p
+              style={{
+                color: '#4B5563',
+                fontSize: '0.9375rem',
+                lineHeight: '1.6',
+                marginBottom: '24px',
+                opacity: 0.9,
+              }}
+            >
+              Rent high-speed EVs starting at just <strong>₹99/hr</strong> or get guaranteed weekly passes for daily shifts.
+              <br />
+              <br />
+              Zero hassle, unlimited kilometers, 100% tension-free!
             </p>
-            <button 
-              className="z-btn z-btn-primary z-btn-full z-btn-lg" 
+            <button
+              className="z-btn z-btn-primary z-btn-full z-btn-lg"
               onClick={() => setShowPopup(false)}
               style={{ fontWeight: 700, fontSize: '1rem', padding: '16px' }}
             >
-              Start Riding
+              Explore Passes
             </button>
           </div>
         </div>
       )}
 
-      {/* ---- STICKY SEARCH CARD ---- */}
-      <div className="search-card">
-        <div className="search-card-inner">
-          {/* Location */}
-          <div className="z-input-group search-location">
-            <label className="z-input-label">
-              <IconMapPin size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-              Pickup Area
-            </label>
-            <div style={{ position: 'relative' }}>
-              <select
-                className="z-input"
-                value={hub}
-                onChange={(e) => setHub(e.target.value)}
-                style={{ appearance: 'none', paddingRight: '36px', cursor: 'pointer' }}
-              >
-                {HUBS.map((h) => (
-                  <option key={h.id} value={h.id}>{h.name}</option>
-                ))}
-              </select>
-              <IconChevronDown
-                size={16}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--z-text-light)' }}
-              />
-            </div>
-          </div>
-
-          {/* Pickup & Dropoff time */}
-          <div className="search-row">
-            <div className="z-input-group">
-              <label className="z-input-label">
-                <IconCalendar size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-                Pickup
-              </label>
-              <input
-                className="z-input"
-                type="datetime-local"
-                value={pickupTime}
-                onChange={(e) => setPickupTime(e.target.value)}
-                style={{ fontSize: '0.8125rem' }}
-              />
-            </div>
-            <div className="z-input-group">
-              <label className="z-input-label">
-                <IconCalendar size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-                Drop-off
-              </label>
-              <input
-                className="z-input"
-                type="datetime-local"
-                value={dropoffTime}
-                onChange={(e) => setDropoffTime(e.target.value)}
-                min={pickupTime}
-                style={{ fontSize: '0.8125rem' }}
-              />
-            </div>
-          </div>
-
-          {/* Duration counter */}
-          {duration >= 1 && (
-            <div className="search-duration">
-              <IconClock size={16} />
-              <span>Duration: {duration} hour{duration !== 1 ? 's' : ''}</span>
-              <span style={{ color: 'var(--z-emerald)', fontWeight: 700 }}>• ₹{PRICING.baseRate * duration} + ₹{PRICING.deposit} deposit</span>
-            </div>
-          )}
-
-          {/* Search button */}
+      {/* ---- SEGMENTED CONTROL / TAB SWITCHER ---- */}
+      <div style={{ padding: '16px 16px 0 16px' }}>
+        <div
+          className="booking-segment-control"
+          style={{
+            display: 'flex',
+            background: '#F3F4F6',
+            borderRadius: '16px',
+            padding: '4px',
+            gap: '4px',
+            border: '1px solid var(--z-border)',
+          }}
+        >
           <button
-            className="z-btn z-btn-primary z-btn-full"
-            onClick={handleSearch}
-            disabled={duration < 1}
+            type="button"
+            onClick={() => setBookingTab('HOURLY')}
+            style={{
+              flex: 1,
+              padding: '12px 14px',
+              borderRadius: '12px',
+              border: 'none',
+              background: bookingTab === 'HOURLY' ? '#FFFFFF' : 'transparent',
+              color: bookingTab === 'HOURLY' ? 'var(--z-emerald-dark)' : '#6B7280',
+              fontWeight: 800,
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              boxShadow: bookingTab === 'HOURLY' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
           >
-            <IconSearch size={18} />
-            Search Available EVs
+            <IconClock size={16} /> Hourly & Day Passes
+          </button>
+          <button
+            type="button"
+            onClick={() => setBookingTab('WEEKLY')}
+            style={{
+              flex: 1,
+              padding: '12px 14px',
+              borderRadius: '12px',
+              border: 'none',
+              background: bookingTab === 'WEEKLY' ? '#FFFFFF' : 'transparent',
+              color: bookingTab === 'WEEKLY' ? 'var(--z-emerald-dark)' : '#6B7280',
+              fontWeight: 800,
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              boxShadow: bookingTab === 'WEEKLY' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
+            <IconZap size={16} /> Weekly Subscriptions
           </button>
         </div>
       </div>
 
-      {/* ---- VEHICLE FLEET CATALOG ---- */}
-      <section className="fleet-section">
-        <div className="z-container">
-          <div className="fleet-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <div>
-              <h2>
-                {searched ? `${availableVehicles.length} EVs Available` : 'Hosted EVs'}
-              </h2>
-              {searched && (
-                <span className="z-badge z-badge-emerald" style={{ marginTop: '4px', display: 'inline-block' }}>
-                  <IconZap size={12} /> Live
-                </span>
+      {/* ========================================================= */}
+      {/* SECTION A: ON-DEMAND HOURLY & DAY PASSES SEARCH CARD */}
+      {/* ========================================================= */}
+      {bookingTab === 'HOURLY' ? (
+        <>
+          <div className="search-card" style={{ marginTop: '12px' }}>
+            <div className="search-card-inner">
+              {/* Location */}
+              <div className="z-input-group search-location">
+                <label className="z-input-label">
+                  <IconMapPin size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                  Pickup Area
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    className="z-input"
+                    value={hub}
+                    onChange={(e) => setHub(e.target.value)}
+                    style={{ appearance: 'none', paddingRight: '36px', cursor: 'pointer' }}
+                  >
+                    {HUBS.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name}
+                      </option>
+                    ))}
+                  </select>
+                  <IconChevronDown
+                    size={16}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                      color: 'var(--z-text-light)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* DURATION CHIP SELECTOR (Royal Brothers Clean Layout) */}
+              <div style={{ marginBottom: '14px' }}>
+                <label className="z-input-label" style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Choose Rental Pass</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--z-emerald)', fontWeight: 700 }}>Tiered Super-Saver</span>
+                </label>
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', paddingTop: '6px' }}>
+                  {HOURLY_TIERS.map((tier) => {
+                    const isSelected = selectedTierHours === tier.hours || duration === tier.hours
+                    return (
+                      <div
+                        key={tier.id}
+                        onClick={() => handleSelectTier(tier.hours)}
+                        style={{
+                          flex: '0 0 auto',
+                          minWidth: '108px',
+                          padding: '10px 10px',
+                          borderRadius: '14px',
+                          border: isSelected ? '2px solid var(--z-emerald)' : '1px solid var(--z-border)',
+                          background: isSelected ? 'var(--z-emerald-ultra-light)' : '#FFFFFF',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          position: 'relative',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none',
+                        }}
+                      >
+                        {tier.badge && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: '-8px',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              background: tier.hours === 6 ? 'var(--z-emerald)' : tier.hours === 12 ? '#3B82F6' : '#F59E0B',
+                              color: '#ffffff',
+                              fontSize: '0.59rem',
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: '999px',
+                              whiteSpace: 'nowrap',
+                              boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                            }}
+                          >
+                            {tier.badge}
+                          </span>
+                        )}
+                        <div style={{ fontWeight: 800, fontSize: '0.9375rem', color: isSelected ? 'var(--z-emerald-dark)' : '#111827' }}>
+                          {tier.label}
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: isSelected ? 'var(--z-emerald)' : '#4B5563', marginTop: '2px' }}>
+                          ₹{tier.price}
+                        </div>
+                        <div style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '2px' }}>
+                          {tier.name}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Pickup & Dropoff time */}
+              <div className="search-row">
+                <div className="z-input-group">
+                  <label className="z-input-label">
+                    <IconCalendar size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                    Pickup
+                  </label>
+                  <input
+                    className="z-input"
+                    type="datetime-local"
+                    value={pickupTime}
+                    onChange={(e) => {
+                      setPickupTime(e.target.value)
+                      setSelectedTierHours(null)
+                    }}
+                    style={{ fontSize: '0.8125rem' }}
+                  />
+                </div>
+                <div className="z-input-group">
+                  <label className="z-input-label">
+                    <IconCalendar size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                    Drop-off
+                  </label>
+                  <input
+                    className="z-input"
+                    type="datetime-local"
+                    value={dropoffTime}
+                    onChange={(e) => {
+                      setDropoffTime(e.target.value)
+                      setSelectedTierHours(null)
+                    }}
+                    min={pickupTime}
+                    style={{ fontSize: '0.8125rem' }}
+                  />
+                </div>
+              </div>
+
+              {/* TRANSPARENT BREAKDOWN COMPONENT */}
+              {duration >= 1 && (
+                <div
+                  style={{
+                    background: '#F9FAFB',
+                    border: '1px solid var(--z-border)',
+                    borderRadius: '14px',
+                    padding: '12px 14px',
+                    margin: '12px 0 16px',
+                    fontSize: '0.8125rem',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#1F2937', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <IconShield size={14} style={{ color: 'var(--z-emerald)' }} /> Transparent Fare Breakdown
+                    </span>
+                    <span className="z-badge z-badge-emerald" style={{ fontSize: '0.6875rem' }}>
+                      {fareBreakdown.durationHours}h ({fareBreakdown.planName})
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#4B5563' }}>
+                    <span>Base Rental Pass</span>
+                    <span style={{ fontWeight: 700 }}>₹{fareBreakdown.rental}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#6B7280', fontSize: '0.75rem' }}>
+                    <span>• Platform & Maintenance Fee (Included)</span>
+                    <span>₹{fareBreakdown.platformFeeTotal}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#4B5563' }}>
+                    <span>100% Refundable Security Deposit</span>
+                    <span style={{ fontWeight: 700 }}>₹{fareBreakdown.deposit}</span>
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: '1px dashed var(--z-border)',
+                      paddingTop: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 800, color: '#111827', fontSize: '0.875rem' }}>Total Payable</span>
+                      <div style={{ fontSize: '0.6875rem', color: '#6B7280' }}>(Includes ₹500 instant UPI refund on return)</div>
+                    </div>
+                    <span style={{ color: 'var(--z-emerald-dark)', fontWeight: 800, fontSize: '1.125rem' }}>
+                      ₹{fareBreakdown.total}
+                    </span>
+                  </div>
+                </div>
               )}
-            </div>
-            
-            {/* Sorting/Filtering */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button 
-                onClick={refreshData}
-                style={{ background: 'var(--z-surface)', border: '1px solid var(--z-border)', padding: '6px 10px', borderRadius: '20px', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--z-text-primary)' }}
-                title="Refresh Live EVs"
-              >
-                <IconRefresh size={14} /> Refresh
+
+              {/* Search button */}
+              <button className="z-btn z-btn-primary z-btn-full" onClick={handleSearch} disabled={duration < 1}>
+                <IconSearch size={18} />
+                Search Available EVs
               </button>
-              <select 
-                className="z-input" 
-                style={{ padding: '6px 12px', fontSize: '0.8125rem', height: 'auto', borderRadius: '20px' }}
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-              >
-                <option value="none">Sort By</option>
-                <option value="battery">High Battery</option>
-                <option value="duration">Longest Duration</option>
-              </select>
             </div>
           </div>
 
-          {availableVehicles.map((vehicle, idx) => (
-            <div
-              key={vehicle.id}
-              className={`vehicle-card animate-fade-in-up stagger-${Math.min(idx + 1, 5)}`}
-              style={vehicle.is_booked ? { opacity: 0.6, filter: 'grayscale(0.8)' } : {}}
-            >
-              {/* Image area */}
-              <div className="vehicle-card-image">
-                <span className="ev-badge z-badge z-badge-emerald">
-                  <IconZap size={10} /> EV
-                </span>
-                {/* Stylized scooter placeholder */}
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}>
-                  <div style={{
-                    width: '120px',
-                    height: '80px',
-                    background: `linear-gradient(135deg, ${vehicle.color}22, ${vehicle.color}44)`,
-                    borderRadius: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: `2px solid ${vehicle.color}33`,
-                  }}>
-                    <IconScooterLarge color={vehicle.color} />
-                  </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '0.6875rem',
-                    fontWeight: 600,
-                    color: 'var(--z-emerald-dark)',
-                    background: 'var(--z-emerald-ultra-light)',
-                    padding: '3px 8px',
-                    borderRadius: 'var(--z-radius-full)',
-                  }}>
-                    <IconBattery size={12} /> {vehicle.battery}%
-                  </div>
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="vehicle-card-body">
-                <div className="vehicle-card-header">
-                  <div>
-                    <div className="vehicle-card-name">{vehicle.model}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--z-text-light)', marginTop: '2px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span>{vehicle.plate}</span>
-                      <span>•</span>
-                      <span style={{ color: 'var(--z-emerald)' }}><IconMapPin size={10} style={{ display: 'inline', verticalAlign: '-1px' }} /> {vehicle.location}</span>
-                    </div>
-                  </div>
-                  <div className="vehicle-card-rate">
-                    <div className="price">₹{vehicle.rate}</div>
-                    <div className="unit">/hr</div>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--z-emerald)', marginBottom: '8px' }}>
-                  Available for up to {vehicle.durationAvailable} hours
-                </div>
-
-                {/* Tags */}
-                <div className="vehicle-card-tags">
-                  {vehicle.tags.map((tag, i) => (
-                    <span key={i} className="z-tag">{tag}</span>
-                  ))}
-                </div>
-
-                {/* Meta + Book */}
-                <div className="vehicle-card-meta">
-                  {vehicle.is_booked ? (
-                    <div className="subtotal" style={{ color: 'var(--z-orange)', fontWeight: 600 }}>
-                      Available after {new Date(vehicle.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  ) : duration >= 1 && searched ? (
-                    <div className="subtotal">
-                      {duration}h → <strong>₹{vehicle.rate * duration}</strong> + ₹500 deposit
-                    </div>
-                  ) : (
-                    <div className="subtotal">
-                      Starting at <strong>₹{vehicle.rate}/hr</strong>
-                    </div>
+          {/* ---- VEHICLE FLEET CATALOG ---- */}
+          <section className="fleet-section">
+            <div className="z-container">
+              <div
+                className="fleet-heading"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}
+              >
+                <div>
+                  <h2>{searched ? `${availableVehicles.length} EVs Available` : 'Hosted EVs'}</h2>
+                  {searched && (
+                    <span className="z-badge z-badge-emerald" style={{ marginTop: '4px', display: 'inline-block' }}>
+                      <IconZap size={12} /> Live Slots for {duration}h
+                    </span>
                   )}
+                </div>
+
+                {/* Sorting/Filtering */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <button
-                    className="z-btn z-btn-primary z-btn-sm"
-                    onClick={() => handleBookNow(vehicle)}
-                    disabled={!searched || vehicle.is_booked}
+                    onClick={refreshData}
+                    style={{
+                      background: 'var(--z-surface)',
+                      border: '1px solid var(--z-border)',
+                      padding: '6px 10px',
+                      borderRadius: '20px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: 'var(--z-text-primary)',
+                    }}
+                    title="Refresh Live EVs"
                   >
-                    {vehicle.is_booked ? 'Booked' : 'Book Now'}
+                    <IconRefresh size={14} /> Refresh
                   </button>
+                  <select
+                    className="z-input"
+                    style={{ padding: '6px 12px', fontSize: '0.8125rem', height: 'auto', borderRadius: '20px' }}
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="none">Sort By</option>
+                    <option value="battery">High Battery</option>
+                    <option value="duration">Longest Duration</option>
+                  </select>
                 </div>
               </div>
-            </div>
-          ))}
 
-          {availableVehicles.length === 0 && (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px 20px',
-              color: 'var(--z-text-muted)',
-            }}>
-              <IconSearch size={40} style={{ opacity: 0.3, marginBottom: '16px' }} />
-              <p>No EVs available for the selected slot.</p>
-              <p style={{ fontSize: '0.8125rem', marginTop: '4px' }}>Try adjusting your pickup time.</p>
+              {availableVehicles.map((vehicle, idx) => (
+                <div
+                  key={vehicle.id}
+                  className={`vehicle-card animate-fade-in-up stagger-${Math.min(idx + 1, 5)}`}
+                  style={vehicle.is_booked ? { opacity: 0.6, filter: 'grayscale(0.8)' } : {}}
+                >
+                  {/* Image area */}
+                  <div className="vehicle-card-image">
+                    <span className="ev-badge z-badge z-badge-emerald">
+                      <IconZap size={10} /> EV
+                    </span>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '120px',
+                          height: '80px',
+                          background: `linear-gradient(135deg, ${vehicle.color}22, ${vehicle.color}44)`,
+                          borderRadius: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: `2px solid ${vehicle.color}33`,
+                        }}
+                      >
+                        <IconScooterLarge color={vehicle.color} />
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.6875rem',
+                          fontWeight: 600,
+                          color: 'var(--z-emerald-dark)',
+                          background: 'var(--z-emerald-ultra-light)',
+                          padding: '3px 8px',
+                          borderRadius: 'var(--z-radius-full)',
+                        }}
+                      >
+                        <IconBattery size={12} /> {vehicle.battery}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="vehicle-card-body">
+                    <div className="vehicle-card-header">
+                      <div>
+                        <div className="vehicle-card-name">{vehicle.model}</div>
+                        <div
+                          style={{
+                            fontSize: '0.75rem',
+                            color: 'var(--z-text-light)',
+                            marginTop: '2px',
+                            display: 'flex',
+                            gap: '8px',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span>{vehicle.plate}</span>
+                          <span>•</span>
+                          <span style={{ color: 'var(--z-emerald)' }}>
+                            <IconMapPin size={10} style={{ display: 'inline', verticalAlign: '-1px' }} /> {vehicle.location}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="vehicle-card-rate">
+                        <div className="price">₹{fareBreakdown.rental}</div>
+                        <div className="unit">/{duration}h pass</div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--z-emerald)', marginBottom: '8px' }}>
+                      Available for up to {vehicle.durationAvailable} hours
+                    </div>
+
+                    {/* Tags */}
+                    <div className="vehicle-card-tags">
+                      {vehicle.tags.map((tag, i) => (
+                        <span key={i} className="z-tag">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Meta + Book */}
+                    <div className="vehicle-card-meta">
+                      {vehicle.is_booked ? (
+                        <div className="subtotal" style={{ color: 'var(--z-orange)', fontWeight: 600 }}>
+                          Available after {new Date(vehicle.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      ) : (
+                        <div className="subtotal">
+                          {duration}h Pass: <strong>₹{fareBreakdown.rental}</strong> + ₹500 dep
+                        </div>
+                      )}
+                      <button
+                        className="z-btn z-btn-primary z-btn-sm"
+                        onClick={() => handleBookNow(vehicle)}
+                        disabled={vehicle.is_booked}
+                      >
+                        {vehicle.is_booked ? 'Booked' : 'Book Pass'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {availableVehicles.length === 0 && (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '60px 20px',
+                    color: 'var(--z-text-muted)',
+                  }}
+                >
+                  <IconSearch size={40} style={{ opacity: 0.3, marginBottom: '16px' }} />
+                  <p>No EVs available for the selected slot.</p>
+                  <p style={{ fontSize: '0.8125rem', marginTop: '4px' }}>Try adjusting your pickup area or time slot.</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </section>
+          </section>
+        </>
+      ) : (
+        /* ========================================================= */
+        /* SECTION B: WEEKLY SUBSCRIPTION PASSES (RECURRING) */
+        /* ========================================================= */
+        <section style={{ padding: '20px 16px 80px' }}>
+          <div className="z-container">
+            <div style={{ textAlign: 'center', marginBottom: '24px' }} className="animate-fade-in-up">
+              <span className="z-badge z-badge-emerald" style={{ marginBottom: '8px' }}>
+                <IconZap size={12} /> Recurring Weekly Commute & Shifts
+              </span>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#111827', marginBottom: '6px' }}>
+                Weekly Subscription Passes
+              </h2>
+              <p style={{ fontSize: '0.875rem', color: '#6B7280', maxWidth: '480px', margin: '0 auto' }}>
+                Lock in your dedicated EV with guaranteed battery swaps, zero security deposit, and predictable passive pricing.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {WEEKLY_SUBSCRIPTIONS.map((sub, idx) => (
+                <div
+                  key={sub.id}
+                  className={`z-card animate-fade-in-up stagger-${idx + 1}`}
+                  style={{
+                    borderRadius: '20px',
+                    border: '1px solid var(--z-border)',
+                    overflow: 'hidden',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
+                  }}
+                >
+                  {/* Card Header Strip */}
+                  <div
+                    style={{
+                      background: idx === 1 ? 'linear-gradient(135deg, #10B981, #059669)' : idx === 2 ? 'linear-gradient(135deg, #4F46E5, #3730A3)' : 'linear-gradient(135deg, #0EA5E9, #0284C7)',
+                      padding: '16px 20px',
+                      color: '#ffffff',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div>
+                      <span
+                        style={{
+                          background: 'rgba(255,255,255,0.2)',
+                          padding: '3px 8px',
+                          borderRadius: '999px',
+                          fontSize: '0.6875rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                        }}
+                      >
+                        {sub.code}
+                      </span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', marginTop: '4px' }}>
+                        {sub.shortName}
+                      </h3>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>₹{sub.price}</div>
+                      <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>/ 7-day week</div>
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="z-card-body" style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                      <span
+                        style={{
+                          background: 'var(--z-emerald-ultra-light)',
+                          color: 'var(--z-emerald-dark)',
+                          padding: '6px 12px',
+                          borderRadius: '10px',
+                          fontSize: '0.8125rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        🕒 {sub.dailyHoursText}
+                      </span>
+                      <span
+                        style={{
+                          background: '#FEF3C7',
+                          color: '#92400E',
+                          padding: '6px 12px',
+                          borderRadius: '10px',
+                          fontSize: '0.8125rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ⚡ Effective ₹{sub.effectivePerDay} / day
+                      </span>
+                      <span
+                        style={{
+                          background: '#EEF2FF',
+                          color: '#4338CA',
+                          padding: '6px 12px',
+                          borderRadius: '10px',
+                          fontSize: '0.8125rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        🛡️ ₹0 Security Deposit
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: '0.875rem', color: '#4B5563', lineHeight: '1.5', marginBottom: '16px' }}>
+                      {sub.description}
+                    </p>
+
+                    <div
+                      style={{
+                        background: '#F9FAFB',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        marginBottom: '16px',
+                        fontSize: '0.8125rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#374151' }}>
+                        <IconCheck size={15} style={{ color: 'var(--z-emerald)' }} />
+                        <span>Unlimited Kilometers (Fair-Use policy)</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#374151' }}>
+                        <IconCheck size={15} style={{ color: 'var(--z-emerald)' }} />
+                        <span>Dedicated Hub or P2P handover at {selectedHub?.name || 'Hub'}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#374151' }}>
+                        <IconCheck size={15} style={{ color: 'var(--z-emerald)' }} />
+                        <span>Host Partner Share: ₹{sub.hostPayout} / Platform Cut: ₹{sub.platformCut}</span>
+                      </div>
+                    </div>
+
+                    {/* CTAs */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <a
+                        href={`https://wa.me/917020905724?text=${encodeURIComponent(
+                          `${sub.whatsappText}\nPickup Area: ${selectedHub?.name || 'Hyderabad'}\nName: ${user?.full_name || 'Customer'}\nPhone: ${user?.phone || ''}`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="z-btn z-btn-outline"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          color: '#16A34A',
+                          borderColor: '#86EFAC',
+                          background: '#F0FDF4',
+                          fontWeight: 700,
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <IconWhatsApp size={18} />
+                        Subscribe via WhatsApp Verification
+                      </a>
+
+                      <button
+                        className="z-btn z-btn-primary z-btn-full"
+                        onClick={() => handleBookSubscription(sub)}
+                        style={{ fontWeight: 700, padding: '12px', borderRadius: '12px' }}
+                      >
+                        Book Pass Online (₹{sub.price} / wk)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </PageShell>
   )
 }

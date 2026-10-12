@@ -31,6 +31,19 @@ const STATUS_LABELS = {
   [BOOKING_STATUS.EXPIRED]: 'Expired',
 }
 
+function getBookingPlanBadge(b) {
+  if (b.is_subscription || b.plan_type === 'SUBSCRIPTION') {
+    return { label: 'WEEKLY-SUB', bg: '#EEF2FF', color: '#4338CA', border: '#C7D2FE' }
+  }
+  const d = Number(b.duration_hours || b.duration || 1)
+  if (d === 1) return { label: '1-HR PASS', bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+  if (d === 3) return { label: '3-HR PASS', bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' }
+  if (d === 6) return { label: '6-HR PASS', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' }
+  if (d === 12) return { label: '12-HR SHIFT', bg: '#EFF6FF', color: '#1E40AF', border: '#BFDBFE' }
+  if (d >= 24) return { label: '24-HR PASS', bg: '#FAF5FF', color: '#6B21A8', border: '#E9D5FF' }
+  return { label: `${d}-HR PASS`, bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' }
+}
+
 export default function AdminHubPanel() {
   const { 
     bookings, 
@@ -364,7 +377,7 @@ export default function AdminHubPanel() {
               { id: 'bookings', label: `Bookings (${bookings.length})` },
               { id: 'vehicles', label: `Listed EVs (${availabilitySlots.length})` },
               { id: 'kyc', label: `KYC (${pendingKycCount})` },
-              { id: 'transactions', label: `Transactions (${bookings.filter(b => b.utr_number).length})` },
+              { id: 'transactions', label: `Settlement Ledger (${bookings.length})` },
               { id: 'customers', label: `Customers (${uniqueCustomers.length})` },
               { id: 'hosts', label: `Hosts (${uniqueHosts.length})` }
             ].map(tab => (
@@ -452,23 +465,46 @@ export default function AdminHubPanel() {
                   <div className="booking-list">
                     {filteredBookings.map((booking) => (
                       <div key={booking.id} className="booking-item" style={{ position: 'relative' }}>
-                        <div className="booking-item-header">
-                          <span className="booking-item-code">{booking.booking_code}</span>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <span className={`z-badge ${STATUS_STYLES[booking.status] || 'z-badge-warning'}`}>
-                              {STATUS_LABELS[booking.status] || booking.status}
-                            </span>
-                            <button
-                              onClick={() => handleDeleteBooking(booking.id, booking.booking_code)}
-                              title="Delete booking"
-                              style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px' }}
-                            >
-                              <IconX size={15} />
-                            </button>
-                          </div>
-                        </div>
+                        {(() => {
+                          const planBadge = getBookingPlanBadge(booking)
+                          return (
+                            <div className="booking-item-header">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span className="booking-item-code">{booking.booking_code}</span>
+                                <span style={{
+                                  background: planBadge.bg,
+                                  color: planBadge.color,
+                                  border: `1px solid ${planBadge.border}`,
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.6875rem',
+                                  fontWeight: 800,
+                                  letterSpacing: '0.04em'
+                                }}>
+                                  {planBadge.label}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <span className={`z-badge ${STATUS_STYLES[booking.status] || 'z-badge-warning'}`}>
+                                  {STATUS_LABELS[booking.status] || booking.status}
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteBooking(booking.id, booking.booking_code)}
+                                  title="Delete booking"
+                                  style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px' }}
+                                >
+                                  <IconX size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })()}
 
                         <div className="booking-item-details">
+                          <span className="label">Plan / Pass</span>
+                          <span className="value" style={{ fontWeight: 800, color: 'var(--z-text-primary)' }}>
+                            {booking.plan_name || (booking.is_subscription ? 'Weekly Subscription' : `${booking.duration || 1}h Pass`)}
+                          </span>
                           <span className="label">Vehicle</span>
                           <span className="value" style={{ fontWeight: 700 }}>{booking.vehicle_model}</span>
                           <span className="label">Customer</span>
@@ -483,6 +519,16 @@ export default function AdminHubPanel() {
                           <span className="value">{booking.hub_name || 'Standard Hub'}</span>
                           <span className="label">Duration</span>
                           <span className="value">{booking.duration} hours</span>
+                          <span className="label">Settlement Ledger</span>
+                          <span className="value" style={{ fontSize: '0.75rem', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ color: 'var(--z-emerald-dark)', fontWeight: 700 }}>
+                              Host Share: ₹{booking.host_payout || Math.round(Number(booking.total_amount || 99) * 0.7)}
+                            </span>
+                            <span>•</span>
+                            <span style={{ color: '#6B7280', fontWeight: 600 }}>
+                              Platform Cut: ₹{booking.platform_fee || Math.round(Number(booking.total_amount || 99) * 0.3)}
+                            </span>
+                          </span>
                           <span className="label">UTR Number</span>
                           <span className="value" style={{ fontFamily: "'Courier New', monospace", fontSize: '0.75rem', fontWeight: 700 }}>
                             {booking.utr_number || '—'}
@@ -972,55 +1018,174 @@ export default function AdminHubPanel() {
           )}
 
           {/* ==================================================== */}
-          {/* TAB 4: PAYMENT TRANSACTIONS */}
+          {/* TAB 4: AUTOMATED SETTLEMENT LEDGER */}
           {/* ==================================================== */}
           {activeTab === 'transactions' && (
             <div className="animate-fade-in-up stagger-1">
-              <div className="admin-section-title">
-                <IconDollar size={14} />
-                Payment Transaction History ({bookings.filter(b => b.utr_number).length})
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {bookings.filter(b => b.utr_number).map(b => (
-                  <div key={b.id} className="z-card">
-                    <div className="z-card-body">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--z-emerald)', fontSize: '1rem' }}>+ ₹{b.total_amount}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)' }}>{formatDateTime(b.created_at)}</span>
+              {/* Ledger Summary Cards */}
+              {(() => {
+                const totalGross = bookings.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0)
+                const totalPlatformCut = bookings.reduce((sum, b) => {
+                  const cut = Number(b.platform_fee) || Math.round((Number(b.total_amount) || 99) * 0.3)
+                  return sum + cut
+                }, 0)
+                const totalHostShare = bookings.reduce((sum, b) => {
+                  const share = Number(b.host_payout) || Math.round((Number(b.total_amount) || 99) * 0.7)
+                  return sum + share
+                }, 0)
+                const completedCount = bookings.filter(b => b.status === BOOKING_STATUS.COMPLETED).length
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                    <div className="z-card" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                      <div className="z-card-body" style={{ padding: '14px' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Gross Inflow</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>₹{totalGross}</div>
+                        <div style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>{bookings.length} total bookings</div>
                       </div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-primary)' }}>
-                        <strong>Customer:</strong> {b.customer_phone} ({b.vehicle_model})
+                    </div>
+                    <div className="z-card" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                      <div className="z-card-body" style={{ padding: '14px' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600 }}>Platform Cut Retained</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#15803D', marginTop: '2px' }}>₹{totalPlatformCut}</div>
+                        <div style={{ fontSize: '0.6875rem', color: '#86EFAC' }}>Platform revenue</div>
                       </div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-primary)', marginTop: '4px' }}>
-                        <strong>UTR Ref:</strong> <span style={{ fontFamily: "'Courier New', monospace", fontWeight: 700 }}>{b.utr_number}</span>
+                    </div>
+                    <div className="z-card" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+                      <div className="z-card-body" style={{ padding: '14px' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: 600 }}>Host Wallet Share</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#2563EB', marginTop: '2px' }}>₹{totalHostShare}</div>
+                        <div style={{ fontSize: '0.6875rem', color: '#93C5FD' }}>Host payouts partitioned</div>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)', marginTop: '4px' }}>
-                        Booking Token: {b.booking_code} | Mode: {b.payment_mode || 'UPI'}
+                    </div>
+                    <div className="z-card" style={{ background: '#FAF5FF', border: '1px solid #E9D5FF' }}>
+                      <div className="z-card-body" style={{ padding: '14px' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#6B21A8', fontWeight: 600 }}>Settled Rides</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#7E22CE', marginTop: '2px' }}>{completedCount}</div>
+                        <div style={{ fontSize: '0.6875rem', color: '#C084FC' }}>Ledger reconciled</div>
                       </div>
-                      {b.status === BOOKING_STATUS.COMPLETED && (
-                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--z-border)', fontSize: '0.8125rem' }}>
-                          {b.deposit_status === 'WITHHELD_FOR_DAMAGE_REVIEW' || b.deposit_status === 'FORFEITED_DAMAGE' ? (
-                            <span style={{ color: '#DC2626', fontWeight: 600 }}>
-                              🚨 ₹500 Deposit Withheld / Forfeited for Damage Review
-                            </span>
-                          ) : b.is_late || (b.late_fee && b.late_fee > 0) ? (
-                            <span style={{ color: '#D97706', fontWeight: 600 }}>
-                              ⏱️ -₹{b.refund_amount || 401} Refunded (₹99 Late Fee Deducted)
-                            </span>
-                          ) : (
-                            <span style={{ color: '#16A34A', fontWeight: 600 }}>
-                              - ₹{b.refund_amount || b.deposit || 500} (Deposit Refunded)
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
-                ))}
-                {bookings.filter(b => b.utr_number).length === 0 && (
+                )
+              })()}
+
+              <div className="admin-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <IconDollar size={15} />
+                  Automated Settlement Ledger ({bookings.length})
+                </span>
+                <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 500 }}>
+                  Live Host Share vs Platform Cut Audit
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {bookings.map((b) => {
+                  const planBadge = getBookingPlanBadge(b)
+                  const platformShare = Number(b.platform_fee) || Math.round((Number(b.total_amount) || 99) * 0.3)
+                  const hostShare = Number(b.host_payout) || Math.round((Number(b.total_amount) || 99) * 0.7)
+                  const isSettled = b.status === BOOKING_STATUS.COMPLETED || b.settlement_logged
+
+                  return (
+                    <div key={b.id} className="z-card" style={{ borderLeft: isSettled ? '4px solid #10B981' : '4px solid #F59E0B' }}>
+                      <div className="z-card-body" style={{ padding: '16px' }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.9375rem', color: '#111827' }}>
+                              {b.booking_code}
+                            </span>
+                            <span style={{
+                              background: planBadge.bg,
+                              color: planBadge.color,
+                              border: `1px solid ${planBadge.border}`,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.6875rem',
+                              fontWeight: 800
+                            }}>
+                              {planBadge.label}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                              {b.vehicle_model}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span className={`z-badge ${isSettled ? 'z-badge-emerald' : 'z-badge-warning'}`} style={{ fontSize: '0.6875rem' }}>
+                              {isSettled ? '✅ Settled & Partitioned' : '🕒 In Escrow (Active)'}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
+                              {formatDateTime(b.created_at)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Customer & UTR Details */}
+                        <div style={{ fontSize: '0.8125rem', color: '#374151', marginBottom: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                          <span><strong>Customer:</strong> {b.customer_phone || 'Direct'}</span>
+                          <span><strong>UTR Ref:</strong> <code style={{ fontWeight: 700, color: '#111827' }}>{b.utr_number || 'WALLET_DEMO'}</code></span>
+                          <span><strong>Hub:</strong> {b.hub_name || 'Standard'}</span>
+                        </div>
+
+                        {/* Partitioned Settlement Split Table */}
+                        <div style={{
+                          background: '#F9FAFB',
+                          borderRadius: '12px',
+                          padding: '12px 14px',
+                          border: '1px solid var(--z-border)',
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                          gap: '10px'
+                        }}>
+                          <div>
+                            <div style={{ fontSize: '0.6875rem', color: '#6B7280', fontWeight: 600 }}>Customer Gross</div>
+                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#111827', marginTop: '2px' }}>₹{b.total_amount}</div>
+                            <div style={{ fontSize: '0.625rem', color: '#9CA3AF' }}>{b.payment_mode || 'FULL'}</div>
+                          </div>
+
+                          <div>
+                            <div style={{ fontSize: '0.6875rem', color: '#15803D', fontWeight: 600 }}>Platform Cut</div>
+                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#15803D', marginTop: '2px' }}>₹{platformShare}</div>
+                            <div style={{ fontSize: '0.625rem', color: '#86EFAC' }}>Retained by Platform</div>
+                          </div>
+
+                          <div>
+                            <div style={{ fontSize: '0.6875rem', color: '#1D4ED8', fontWeight: 600 }}>Host Share</div>
+                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#1D4ED8', marginTop: '2px' }}>₹{hostShare}</div>
+                            <div style={{ fontSize: '0.625rem', color: '#93C5FD' }}>Credited to Host Ledger</div>
+                          </div>
+
+                          <div>
+                            <div style={{ fontSize: '0.6875rem', color: '#6B7280', fontWeight: 600 }}>Security Deposit</div>
+                            <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#374151', marginTop: '2px' }}>
+                              {b.is_subscription ? '₹0 (Waived)' : `₹${b.deposit || 500}`}
+                            </div>
+                            <div style={{ fontSize: '0.625rem', color: b.status === BOOKING_STATUS.COMPLETED ? '#15803D' : '#D97706', fontWeight: 600 }}>
+                              {b.status === BOOKING_STATUS.COMPLETED ? (b.deposit_status || 'REFUNDED') : 'HELD IN ESCROW'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Completion / Damage note */}
+                        {b.status === BOOKING_STATUS.COMPLETED && (
+                          <div style={{ marginTop: '10px', fontSize: '0.75rem', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <IconCheck size={14} style={{ color: 'var(--z-emerald)' }} />
+                            <span>
+                              Settlement logged upon completion: Host wallet received <strong>₹{hostShare}</strong>, Platform booked <strong>₹{platformShare}</strong> profit.
+                              {b.is_late && ' (₹99 late fee deducted from deposit)'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {bookings.length === 0 && (
                   <div className="z-card">
                     <div className="z-card-body" style={{ textAlign: 'center', padding: '30px', color: 'var(--z-text-muted)' }}>
-                      <p style={{ fontWeight: 500 }}>No payment transactions recorded yet.</p>
+                      <p style={{ fontWeight: 500 }}>No ledger transactions recorded yet.</p>
                     </div>
                   </div>
                 )}

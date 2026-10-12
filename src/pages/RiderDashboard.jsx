@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store.jsx'
-import { PRICING, formatDateTime } from '../lib/data.js'
+import { PRICING, formatDateTime, calculateTieredFare } from '../lib/data.js'
 import { PageShell, RiderBottomNav } from '../components/Layout.jsx'
 import { 
   IconScooter, IconDollar, IconZap, IconPlus, IconClock, 
@@ -351,18 +351,34 @@ export default function RiderDashboard() {
             </div>
           </div>
 
-          {/* Earnings Rate Banner */}
+          {/* Tiered Payout Rate Banner */}
           <div className="z-card animate-fade-in-up stagger-2" style={{ marginBottom: '24px', border: '1px solid var(--z-emerald-light)', background: 'var(--z-emerald-ultra-light)' }}>
             <div className="z-card-body" style={{ textAlign: 'center' }}>
-              <IconDollar size={24} style={{ color: 'var(--z-emerald)', marginBottom: '8px' }} />
-              <div style={{ fontSize: '0.8125rem', color: 'var(--z-emerald-dark)', fontWeight: 500, marginBottom: '4px' }}>
-                Host Payout Rate
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: 'var(--z-emerald)', marginBottom: '8px' }}>
+                <IconZap size={20} />
+                <span style={{ fontSize: '0.8125rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Multi-Tier Passive Income Engine
+                </span>
               </div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--z-emerald)' }}>
-                ₹{PRICING.hostPayout}/hour
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginTop: '8px' }}>
+                <div style={{ background: '#ffffff', padding: '10px 8px', borderRadius: '12px', border: '1px solid var(--z-border)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>6-Hour Slot</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--z-emerald)' }}>₹210 / day</div>
+                  <div style={{ fontSize: '0.6875rem', color: '#9CA3AF' }}>₹5,460/mo passive</div>
+                </div>
+                <div style={{ background: '#ffffff', padding: '10px 8px', borderRadius: '12px', border: '1px solid var(--z-border)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>12-Hour Shift</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#3B82F6' }}>₹279 / day</div>
+                  <div style={{ fontSize: '0.6875rem', color: '#9CA3AF' }}>₹7,250/mo passive</div>
+                </div>
+                <div style={{ background: '#ffffff', padding: '10px 8px', borderRadius: '12px', border: '1px solid var(--z-border)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>Weekly Listing</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#8B5CF6' }}>Up to ₹1,650</div>
+                  <div style={{ fontSize: '0.6875rem', color: '#9CA3AF' }}>Guaranteed / week</div>
+                </div>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--z-emerald-dark)', marginTop: '4px' }}>
-                You earn for the exact duration customers rent your EV • Instant UPI settlement
+              <div style={{ fontSize: '0.75rem', color: 'var(--z-emerald-dark)', marginTop: '12px', fontWeight: 500 }}>
+                Automatic UPI settlement into your wallet upon ride completion • 100% passive while resting
               </div>
             </div>
           </div>
@@ -438,6 +454,16 @@ export default function RiderDashboard() {
                         <div style={{ fontSize: '0.8125rem', color: 'var(--z-text-muted)', marginBottom: '6px' }}>
                           Registration: <b style={{ fontFamily: "'Courier New', monospace" }}>{slot.plate}</b> • Battery: <b>{slot.battery || 90}%</b>
                         </div>
+
+                        {slot.listing_type === 'WEEKLY_COMMITMENT' ? (
+                          <div style={{ background: '#EFF6FF', padding: '6px 10px', borderRadius: '8px', fontSize: '0.75rem', color: '#1E40AF', marginBottom: '8px', fontWeight: 600 }}>
+                            📅 Weekly Commitment: {slot.daily_hours || `${slot.commitment_days || 6} days`} • Payout: ₹{slot.host_payout_expected || 1650}/wk
+                          </div>
+                        ) : (
+                          <div style={{ background: 'var(--z-emerald-ultra-light)', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', color: 'var(--z-emerald-dark)', marginBottom: '8px', fontWeight: 600 }}>
+                            ⚡ Single Slot ({hours}h) • Max Host Share: ₹{calculateTieredFare(hours).hostPayoutTotal}
+                          </div>
+                        )}
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.75rem', color: 'var(--z-text-muted)' }}>
                           <div>
