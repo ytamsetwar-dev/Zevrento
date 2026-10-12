@@ -6,7 +6,8 @@ import { PageShell } from '../components/Layout.jsx'
 import { 
   IconShield, IconCheck, IconClipboard, IconRefresh, 
   IconScooter, IconX, IconUser, IconDollar, IconBattery, 
-  IconMapPin, IconClock, IconPhone, IconWhatsApp, IconBell
+  IconMapPin, IconClock, IconPhone, IconWhatsApp, IconBell,
+  IconAlertTriangle
 } from '../components/Icons.jsx'
 import { requestNotificationPermission, playChime, sendNotification } from '../lib/notifications.js'
 
@@ -36,6 +37,7 @@ export default function AdminHubPanel() {
     availabilitySlots, 
     approveBooking, 
     completeBooking, 
+    completeRideWithInspection,
     updateBookingStatus, 
     deleteBooking,
     deleteSlot,
@@ -53,6 +55,13 @@ export default function AdminHubPanel() {
   const [notificationsActive, setNotificationsActive] = useState(() => {
     return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   })
+
+  // Return inspection modal states
+  const [inspectModalBooking, setInspectModalBooking] = useState(null)
+  const [inspectionConditionChecked, setInspectionConditionChecked] = useState(false)
+  const [inspectionOnTimeChecked, setInspectionOnTimeChecked] = useState(true)
+  const [inspectionHasDamage, setInspectionHasDamage] = useState(false)
+  const [inspectionDamageNotes, setInspectionDamageNotes] = useState('')
 
   const [dbProfiles, setDbProfiles] = useState([])
 
@@ -206,8 +215,76 @@ export default function AdminHubPanel() {
     }
   }
 
+  const handleStartInspection = (booking) => {
+    const now = new Date()
+    const scheduledEnd = new Date(booking.end_time)
+    const isLate = (now - scheduledEnd) > (15 * 60 * 1000)
+    setInspectModalBooking(booking)
+    setInspectionConditionChecked(false)
+    setInspectionOnTimeChecked(!isLate)
+    setInspectionHasDamage(false)
+    setInspectionDamageNotes('')
+  }
+
+  const handleConfirmInspectionSubmit = async () => {
+    if (!inspectModalBooking) return
+    if (!inspectionConditionChecked) {
+      alert("Please confirm the vehicle condition checkbox before completing.")
+      return
+    }
+
+    const now = new Date()
+    const scheduledEnd = new Date(inspectModalBooking.end_time)
+    const lateDiffMs = now - scheduledEnd
+    const lateMinutes = Math.max(0, Math.round(lateDiffMs / (60 * 1000)))
+    const isLate = !inspectionOnTimeChecked || lateMinutes > 15
+    const lateFee = isLate ? 99 : 0
+    let refundAmount = isLate ? (500 - 99) : 500
+    let depositStatus = 'REFUNDED'
+
+    if (inspectionHasDamage) {
+      refundAmount = 0
+      depositStatus = 'WITHHELD_FOR_DAMAGE_REVIEW'
+    }
+
+    await completeRideWithInspection(inspectModalBooking.id, {
+      inspection_condition_checked: true,
+      on_time_dropping: inspectionOnTimeChecked,
+      is_late: isLate,
+      late_minutes: isLate ? lateMinutes : 0,
+      late_fee: lateFee,
+      has_damage: inspectionHasDamage,
+      damage_notes: inspectionDamageNotes,
+      refund_amount: refundAmount,
+      deposit_status: depositStatus
+    })
+
+    alert(`Inspection logged! Ride marked completed. ${inspectionHasDamage ? 'Deposit withheld for damage review.' : (isLate ? '₹99 late fee deducted from deposit.' : 'Full deposit refunded.')}`)
+    setInspectModalBooking(null)
+  }
+
+  const handleResolveDamageReview = async (bookingId, decision) => {
+    if (decision === 'FORFEIT') {
+      if (!window.confirm("Pre/post inspection videos verified: Damage is confirmed. Forfeit the ₹500 security deposit?")) return
+      await updateBookingStatus(bookingId, BOOKING_STATUS.COMPLETED, {
+        deposit_status: 'FORFEITED_DAMAGE',
+        refund_amount: 0,
+        admin_video_verified: true
+      })
+      alert("Deposit permanently forfeited. Logged in audit history.")
+    } else {
+      if (!window.confirm("Pre/post inspection videos verified: Clear customer of fault and release ₹500 deposit refund?")) return
+      await updateBookingStatus(bookingId, BOOKING_STATUS.COMPLETED, {
+        deposit_status: 'REFUNDED_AFTER_REVIEW',
+        refund_amount: 500,
+        admin_video_verified: true
+      })
+      alert("₹500 Deposit refund released to customer.")
+    }
+  }
+
   const handleComplete = (booking) => {
-    completeBooking(booking.id)
+    handleStartInspection(booking)
   }
 
   const handleDeleteBooking = (bookingId, code) => {
@@ -508,11 +585,28 @@ export default function AdminHubPanel() {
                         {/* ---- ACTIVE: Return & Complete ---- */}
                         {booking.status === BOOKING_STATUS.ACTIVE && (
                           <div style={{ marginTop: '10px' }}>
+                            {booking.return_requested && (
+                              <div style={{
+                                padding: '6px 10px',
+                                background: '#ECFDF5',
+                                border: '1px solid #A7F3D0',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                color: '#065F46',
+                                fontWeight: 600,
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}>
+                                <IconCheck size={14} /> Customer initiated return! Ready for inspection.
+                              </div>
+                            )}
                             <button
                               className="z-btn z-btn-primary z-btn-sm z-btn-full"
-                              onClick={() => handleComplete(booking)}
+                              onClick={() => handleStartInspection(booking)}
                             >
-                              <IconRefresh size={14} /> Complete Return — Refund ₹{booking.deposit || 500} & Credit Host
+                              <IconRefresh size={14} /> Inspect & Complete Return
                             </button>
                           </div>
                         )}
@@ -523,15 +617,82 @@ export default function AdminHubPanel() {
                             marginTop: '10px',
                             display: 'flex', flexDirection: 'column', gap: '6px',
                           }}>
-                            <div style={{
-                              padding: '8px 12px',
-                              background: 'var(--z-emerald-ultra-light)',
-                              borderRadius: 'var(--z-radius-sm)',
-                              fontSize: '0.75rem', fontWeight: 600, color: 'var(--z-emerald-dark)',
-                              display: 'flex', alignItems: 'center', gap: '6px',
-                            }}>
-                              <IconCheck size={14} /> Deposit ₹{booking.deposit || 500} refunded to customer
-                            </div>
+                            {booking.deposit_status === 'WITHHELD_FOR_DAMAGE_REVIEW' || (booking.has_damage && !booking.admin_video_verified) ? (
+                              <div style={{
+                                padding: '10px 12px',
+                                background: '#FEF2F2',
+                                border: '1px solid #FECACA',
+                                borderRadius: 'var(--z-radius-sm)',
+                                fontSize: '0.75rem',
+                              }}>
+                                <div style={{ color: '#991B1B', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <IconAlertTriangle size={15} /> 🚨 DAMAGE REPORTED — Video Verification Pending
+                                </div>
+                                <div style={{ color: '#7F1D1D', marginTop: '4px' }}>
+                                  <strong>Damage Notes:</strong> {booking.damage_notes || 'Damage noted during return inspection'}
+                                </div>
+                                <div style={{ color: '#B91C1C', marginTop: '4px', fontSize: '0.6875rem' }}>
+                                  Deposit ₹500 is currently withheld. Compare pre-ride & post-ride inspection videos to conclude action:
+                                </div>
+                                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                                  <button
+                                    onClick={() => handleResolveDamageReview(booking.id, 'FORFEIT')}
+                                    className="z-btn z-btn-sm"
+                                    style={{ background: '#DC2626', color: '#fff', border: 'none', flex: 1, fontSize: '0.6875rem', cursor: 'pointer' }}
+                                  >
+                                    Confirm Video: Forfeit Deposit (₹0)
+                                  </button>
+                                  <button
+                                    onClick={() => handleResolveDamageReview(booking.id, 'REFUND')}
+                                    className="z-btn z-btn-sm"
+                                    style={{ background: '#16A34A', color: '#fff', border: 'none', flex: 1, fontSize: '0.6875rem', cursor: 'pointer' }}
+                                  >
+                                    Clear Video: Refund ₹500
+                                  </button>
+                                </div>
+                              </div>
+                            ) : booking.deposit_status === 'FORFEITED_DAMAGE' ? (
+                              <div style={{
+                                padding: '8px 12px',
+                                background: '#FEF2F2',
+                                borderRadius: 'var(--z-radius-sm)',
+                                fontSize: '0.75rem', fontWeight: 600, color: '#991B1B',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                              }}>
+                                <IconAlertTriangle size={14} /> ₹500 Deposit Forfeited (Video Confirmed Damage)
+                              </div>
+                            ) : booking.deposit_status === 'REFUNDED_AFTER_REVIEW' ? (
+                              <div style={{
+                                padding: '8px 12px',
+                                background: '#F0FDF4',
+                                borderRadius: 'var(--z-radius-sm)',
+                                fontSize: '0.75rem', fontWeight: 600, color: '#166534',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                              }}>
+                                <IconCheck size={14} /> ₹500 Deposit Refunded (Cleared by Video Review)
+                              </div>
+                            ) : booking.is_late || (booking.late_fee && booking.late_fee > 0) ? (
+                              <div style={{
+                                padding: '8px 12px',
+                                background: '#FFFBEB',
+                                borderRadius: 'var(--z-radius-sm)',
+                                fontSize: '0.75rem', fontWeight: 600, color: '#92400E',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                              }}>
+                                <IconClock size={14} /> Late drop-off ({booking.late_minutes}m): ₹{booking.late_fee || 99} deducted, ₹{booking.refund_amount || 401} refunded
+                              </div>
+                            ) : (
+                              <div style={{
+                                padding: '8px 12px',
+                                background: 'var(--z-emerald-ultra-light)',
+                                borderRadius: 'var(--z-radius-sm)',
+                                fontSize: '0.75rem', fontWeight: 600, color: 'var(--z-emerald-dark)',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                              }}>
+                                <IconCheck size={14} /> Clean return: Deposit ₹{booking.refund_amount || 500} refunded
+                              </div>
+                            )}
+
                             <div style={{
                               padding: '8px 12px',
                               background: '#F0F9FF',
@@ -837,8 +998,20 @@ export default function AdminHubPanel() {
                         Booking Token: {b.booking_code} | Mode: {b.payment_mode || 'UPI'}
                       </div>
                       {b.status === BOOKING_STATUS.COMPLETED && (
-                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--z-border)', fontSize: '0.8125rem', color: '#991B1B', fontWeight: 600 }}>
-                          - ₹{b.deposit || 500} (Deposit Refunded)
+                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--z-border)', fontSize: '0.8125rem' }}>
+                          {b.deposit_status === 'WITHHELD_FOR_DAMAGE_REVIEW' || b.deposit_status === 'FORFEITED_DAMAGE' ? (
+                            <span style={{ color: '#DC2626', fontWeight: 600 }}>
+                              🚨 ₹500 Deposit Withheld / Forfeited for Damage Review
+                            </span>
+                          ) : b.is_late || (b.late_fee && b.late_fee > 0) ? (
+                            <span style={{ color: '#D97706', fontWeight: 600 }}>
+                              ⏱️ -₹{b.refund_amount || 401} Refunded (₹99 Late Fee Deducted)
+                            </span>
+                          ) : (
+                            <span style={{ color: '#16A34A', fontWeight: 600 }}>
+                              - ₹{b.refund_amount || b.deposit || 500} (Deposit Refunded)
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -991,6 +1164,182 @@ export default function AdminHubPanel() {
 
         </div>
       </div>
+
+      {/* Return & Inspection Modal for Admin */}
+      {inspectModalBooking && (() => {
+        const now = new Date()
+        const scheduledEnd = new Date(inspectModalBooking.end_time)
+        const lateDiffMs = now - scheduledEnd
+        const lateMinutes = Math.max(0, Math.round(lateDiffMs / (60 * 1000)))
+        const autoLate = lateMinutes > 15
+        const effectiveLate = !inspectionOnTimeChecked || autoLate
+        const lateFee = effectiveLate ? 99 : 0
+        let refundAmount = effectiveLate ? (500 - 99) : 500
+        if (inspectionHasDamage) refundAmount = 0
+
+        return (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, padding: '16px'
+          }}>
+            <div style={{
+              background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '480px',
+              padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.125rem', color: '#111827' }}>
+                  Return Inspection & Handover
+                </h3>
+                <button
+                  onClick={() => setInspectModalBooking(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', color: '#6B7280' }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.8125rem', color: '#4B5563', marginBottom: '16px' }}>
+                Complete the physical verification for Booking <strong>{inspectModalBooking.booking_code}</strong> ({inspectModalBooking.vehicle_model}).
+              </div>
+
+              {/* Requirement 1: Vehicle Condition Checked */}
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: '10px',
+                padding: '12px', background: '#F9FAFB', border: '1px solid #E5E7EB',
+                borderRadius: '8px', cursor: 'pointer', marginBottom: '12px'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={inspectionConditionChecked}
+                  onChange={(e) => setInspectionConditionChecked(e.target.checked)}
+                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: 'var(--z-emerald)' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#111827' }}>
+                    Vehicle Condition Checked
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '2px' }}>
+                    Physical inspection verified: Key returned, helmet in place, and body checked.
+                  </div>
+                </div>
+              </label>
+
+              {/* Requirement 2: On-Time Dropping Check */}
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: '10px',
+                padding: '12px',
+                background: autoLate ? '#FEF2F2' : '#F9FAFB',
+                border: `1px solid ${autoLate ? '#FCA5A5' : '#E5E7EB'}`,
+                borderRadius: '8px', cursor: 'pointer', marginBottom: '12px'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={inspectionOnTimeChecked}
+                  onChange={(e) => setInspectionOnTimeChecked(e.target.checked)}
+                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: 'var(--z-emerald)' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: autoLate ? '#991B1B' : '#111827' }}>
+                    On-Time Dropping Verified
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: autoLate ? '#7F1D1D' : '#6B7280', marginTop: '2px' }}>
+                    {autoLate ? (
+                      <span>⚠️ <strong>Customer is {lateMinutes} mins late!</strong> Exceeded 15-min grace period. A 1-hour late fee of ₹99 will be deducted from their security deposit.</span>
+                    ) : (
+                      <span>Returned within scheduled booking window or grace period (15 mins).</span>
+                    )}
+                  </div>
+                </div>
+              </label>
+
+              {/* Requirement 3: Vehicle Damage Check */}
+              <div style={{
+                padding: '12px', background: inspectionHasDamage ? '#FEF2F2' : '#F9FAFB',
+                border: `1px solid ${inspectionHasDamage ? '#F87171' : '#E5E7EB'}`,
+                borderRadius: '8px', marginBottom: '16px'
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={inspectionHasDamage}
+                    onChange={(e) => setInspectionHasDamage(e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: '#DC2626' }}
+                  />
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '0.875rem', color: inspectionHasDamage ? '#991B1B' : '#111827' }}>
+                      Report Vehicle Damage / Scratches
+                    </span>
+                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                      Action: ₹500 deposit withheld pending verification of pre-ride vs post-ride inspection videos.
+                    </div>
+                  </div>
+                </label>
+
+                {inspectionHasDamage && (
+                  <div style={{ marginTop: '10px' }}>
+                    <textarea
+                      placeholder="Specify damage observed (e.g., dented right mirror, front scratch)..."
+                      value={inspectionDamageNotes}
+                      onChange={(e) => setInspectionDamageNotes(e.target.value)}
+                      style={{
+                        width: '100%', minHeight: '60px', padding: '8px',
+                        fontSize: '0.8125rem', border: '1px solid #FCA5A5',
+                        borderRadius: '6px', resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Settlement Summary preview */}
+              <div style={{
+                padding: '10px 14px', background: '#F3F4F6', borderRadius: '8px',
+                fontSize: '0.8125rem', marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>Security Deposit:</span>
+                  <span style={{ fontWeight: 600 }}>₹500</span>
+                </div>
+                {effectiveLate && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#DC2626', marginBottom: '4px' }}>
+                    <span>Late Drop-off Fee (&gt;15 min):</span>
+                    <span style={{ fontWeight: 600 }}>-₹{lateFee}</span>
+                  </div>
+                )}
+                {inspectionHasDamage ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#DC2626', fontWeight: 700 }}>
+                    <span>Refund Status:</span>
+                    <span>WITHHELD FOR VIDEO REVIEW (₹0)</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16A34A', fontWeight: 700 }}>
+                    <span>Deposit Refund to Customer:</span>
+                    <span>₹{refundAmount}</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={handleConfirmInspectionSubmit}
+                  className="z-btn z-btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={!inspectionConditionChecked}
+                >
+                  Confirm & Mark Ride Completed
+                </button>
+                <button
+                  onClick={() => setInspectModalBooking(null)}
+                  className="z-btn z-btn-outline"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </PageShell>
   )
 }

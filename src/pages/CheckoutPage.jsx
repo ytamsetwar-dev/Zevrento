@@ -12,7 +12,7 @@ import { IconMapPin, IconClock, IconCheck, IconWhatsApp, IconShield, IconZap } f
 export default function CheckoutPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { createBooking, markSlotAsBooked, user } = useApp()
+  const { createBooking, splitOrBookSlot, markSlotAsBooked, user } = useApp()
   const state = location.state
 
   const [bookingResult, setBookingResult] = useState(null)
@@ -96,7 +96,12 @@ export default function CheckoutPage() {
       setPaymentProcessing(false)
       setBooked(true)
       setShowUtrModal(false)
-      markSlotAsBooked(vehicle.id)
+      // Smart slot split: vehicle becomes available after dropoffTime + 1 hour turnaround!
+      if (splitOrBookSlot) {
+        splitOrBookSlot(vehicle.id, pickupTime, dropoffTime)
+      } else {
+        markSlotAsBooked(vehicle.id)
+      }
 
       // Send Push Notifications safely (via OneSignal if REST key configured)
       const adminPhone = "7020905724"
