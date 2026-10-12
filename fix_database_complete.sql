@@ -14,7 +14,7 @@ DROP FUNCTION IF EXISTS generate_pickup_otp();
 ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_vehicle_id_fkey;
 ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_slot_id_fkey;
 
--- 3. FIX BOOKINGS TABLE SCHEMA (CONVERT UUID COLUMNS TO TEXT)
+-- 3. FIX BOOKINGS TABLE SCHEMA (CONVERT UUID COLUMNS TO TEXT & ADD INSPECTION COLUMNS)
 ALTER TABLE public.bookings ALTER COLUMN id TYPE text USING id::text;
 ALTER TABLE public.bookings ALTER COLUMN vehicle_id TYPE text USING vehicle_id::text;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS slot_id text;
@@ -35,6 +35,42 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS host_payout numeric;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS utr_number text;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_mode text DEFAULT 'UPI';
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS duration numeric;
+
+-- Inspection & Return Status Columns
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS inspection_condition_checked boolean DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS inspection_on_time boolean DEFAULT true;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS is_late boolean DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS late_minutes numeric DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS late_fee numeric DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS has_damage boolean DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS damage_notes text DEFAULT '';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_amount numeric DEFAULT 500;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS deposit_status text DEFAULT 'FULL_REFUND';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS return_requested boolean DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS completed_at timestamp with time zone;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS admin_video_verified boolean DEFAULT false;
+
+-- Remove blocking NOT NULL constraints if existing
+DO $$
+BEGIN
+  ALTER TABLE public.bookings ALTER COLUMN start_time DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$
+BEGIN
+  ALTER TABLE public.bookings ALTER COLUMN end_time DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$
+BEGIN
+  ALTER TABLE public.bookings ALTER COLUMN platform_fee DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$
+BEGIN
+  ALTER TABLE public.bookings ALTER COLUMN host_payout DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- 4. FIX AVAILABILITY_SLOTS TABLE SCHEMA
 ALTER TABLE public.availability_slots ALTER COLUMN id TYPE text USING id::text;
